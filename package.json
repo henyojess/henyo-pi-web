@@ -1,0 +1,27 @@
+{
+  "name": "henyo-pi-web",
+  "version": "1.0.0",
+  "type": "module",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/henyojess/henyo-pi-web.git"
+  },
+  "bugs": {
+    "url": "https://github.com/henyojess/henyo-pi-web/issues"
+  },
+  "homepage": "https://github.com/henyojess/henyo-pi-web#readme",
+  "files": [
+    "skills/",
+    "LICENSE",
+    "README.md"
+  ],
+  "description": "Web search and fetch tools for Pi — DDG, Stack Overflow, Wikipedia, Defuddle extraction, and more.",
+  "keywords": ["pi-package", "pi-skill"],
+  "dependencies": {
+    "defuddle": "0.19.1",
+    "jsdom": "26.1.0"
+  },
+  "pi": {
+    "skills": ["skills/web-tools"]
+  }
+}
