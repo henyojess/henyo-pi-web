@@ -6,6 +6,16 @@ Web search and content extraction tools for [Pi](https://github.com/earendil-wor
 
 ## Install
 
+**Ask your Pi agent:**
+
+```
+install the web-tools skill
+```
+
+That's it. The agent handles everything.
+
+**Manual install** (if needed):
+
 ```bash
 pi install npm:henyo-pi-web
 ln -sf ~/.pi/agent/npm/henyo-pi-web/skills/web-tools/web_search.js ~/.pi/agent/bin/web_search
