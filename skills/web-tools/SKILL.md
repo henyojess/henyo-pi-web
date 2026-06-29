@@ -9,32 +9,11 @@ compatibility: Requires Node.js (ESM) and internet access. Installs `defuddle` a
 
 Search the web and fetch page content.
 
-## One-time Setup (install this skill)
+## One-time Setup
 
-When the user asks to install this skill, run these steps:
+When the user asks to install this skill (after the package is installed), run these steps:
 
-### Step 1: Install the package
-
-```bash
-# npm (recommended — auto-installs dependencies)
-pi install npm:henyo-pi-web
-
-# or git
-pi install git:github.com/user/henyo-pi-web
-
-# or local path
-pi install /path/to/henyo-pi-web
-```
-
-> `pi install` auto-runs `npm install` for npm and git sources. For local paths, continue to Step 1b.
-
-#### Step 1b: Install dependencies (local path only)
-
-```bash
-cd /path/to/henyo-pi-web && npm install
-```
-
-### Step 2: Make scripts available on PATH
+### Step 1: Make scripts available on PATH
 
 Create symlinks so the agent can call `web_search` and `web_fetch` as global commands. Adapt the path to match the install source:
 

@@ -9,10 +9,16 @@ Web search and content extraction tools for [Pi](https://github.com/earendil-wor
 **Ask your Pi agent:**
 
 ```
-install the web-tools skill
+install the henyo-pi-web npm package
 ```
 
-That's it. The agent handles everything.
+Or run directly in your terminal:
+
+```bash
+pi install npm:henyo-pi-web
+```
+
+After install, load the skill with: `/skill:web-tools`
 
 **Manual install** (if needed):
 
