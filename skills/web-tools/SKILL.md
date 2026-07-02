@@ -15,22 +15,22 @@ When the user asks to install this skill (after the package is installed), run t
 
 ### Step 1: Make scripts available on PATH
 
-Create symlinks so the agent can call `web_search` and `web_fetch` as global commands. Adapt the path to match the install source:
+Create symlinks so the agent can call `web_search` and `web_fetch` as global commands. **Only create them if they don't already exist** — skip silently if the link is already in place. Adapt the path to match the install source:
 
 ```bash
 # npm install — predictable path
-ln -sf ~/.pi/agent/npm/henyo-pi-web/skills/web-tools/web_search.js ~/.pi/agent/bin/web_search
-ln -sf ~/.pi/agent/npm/henyo-pi-web/skills/web-tools/web_fetch.js ~/.pi/agent/bin/web_fetch
+[ -L ~/.pi/agent/bin/web_search ] || ln -sf ~/.pi/agent/npm/henyo-pi-web/skills/web-tools/web_search.js ~/.pi/agent/bin/web_search
+[ -L ~/.pi/agent/bin/web_fetch ] || ln -sf ~/.pi/agent/npm/henyo-pi-web/skills/web-tools/web_fetch.js ~/.pi/agent/bin/web_fetch
 
 # git install — predictable path
-ln -sf ~/.pi/agent/git/github.com/user/henyo-pi-web/skills/web-tools/web_search.js ~/.pi/agent/bin/web_search
-ln -sf ~/.pi/agent/git/github.com/user/henyo-pi-web/skills/web-tools/web_fetch.js ~/.pi/agent/bin/web_fetch
+[ -L ~/.pi/agent/bin/web_search ] || ln -sf ~/.pi/agent/git/github.com/user/henyo-pi-web/skills/web-tools/web_search.js ~/.pi/agent/bin/web_search
+[ -L ~/.pi/agent/bin/web_fetch ] || ln -sf ~/.pi/agent/git/github.com/user/henyo-pi-web/skills/web-tools/web_fetch.js ~/.pi/agent/bin/web_fetch
 
 # local install — discover dynamically
 SEARCH_FILE=$(find /path/to/henyo-pi-web -name web_search.js -type f 2>/dev/null | head -1)
 FETCH_FILE=$(find /path/to/henyo-pi-web -name web_fetch.js -type f 2>/dev/null | head -1)
-ln -sf "$SEARCH_FILE" ~/.pi/agent/bin/web_search
-ln -sf "$FETCH_FILE" ~/.pi/agent/bin/web_fetch
+[ -L ~/.pi/agent/bin/web_search ] || ln -sf "$SEARCH_FILE" ~/.pi/agent/bin/web_search
+[ -L ~/.pi/agent/bin/web_fetch ] || ln -sf "$FETCH_FILE" ~/.pi/agent/bin/web_fetch
 ```
 
 ### Step 3: Verify
