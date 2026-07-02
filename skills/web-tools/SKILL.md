@@ -19,8 +19,8 @@ Create symlinks so the agent can call `web_search` and `web_fetch` as global com
 
 ```bash
 # npm install — predictable path
-[ -L ~/.pi/agent/bin/web_search ] || ln -sf ~/.pi/agent/npm/henyo-pi-web/skills/web-tools/web_search.js ~/.pi/agent/bin/web_search
-[ -L ~/.pi/agent/bin/web_fetch ] || ln -sf ~/.pi/agent/npm/henyo-pi-web/skills/web-tools/web_fetch.js ~/.pi/agent/bin/web_fetch
+[ -L ~/.pi/agent/bin/web_search ] || ln -sf ~/.pi/agent/npm/node_modules/henyo-pi-web/skills/web-tools/web_search.js ~/.pi/agent/bin/web_search
+[ -L ~/.pi/agent/bin/web_fetch ] || ln -sf ~/.pi/agent/npm/node_modules/henyo-pi-web/skills/web-tools/web_fetch.js ~/.pi/agent/bin/web_fetch
 
 # git install — predictable path
 [ -L ~/.pi/agent/bin/web_search ] || ln -sf ~/.pi/agent/git/github.com/user/henyo-pi-web/skills/web-tools/web_search.js ~/.pi/agent/bin/web_search
