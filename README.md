@@ -16,11 +16,11 @@ Or run directly in your terminal:
 
 ```bash
 pi install npm:henyo-pi-web
-ln -sf ~/.pi/agent/npm/henyo-pi-web/skills/web-tools/web_search.js ~/.pi/agent/bin/web_search
-ln -sf ~/.pi/agent/npm/henyo-pi-web/skills/web-tools/web_fetch.js ~/.pi/agent/bin/web_fetch
+[ -L ~/.pi/agent/bin/web_search ] || ln -sf ~/.pi/agent/npm/henyo-pi-web/skills/web-tools/web_search.js ~/.pi/agent/bin/web_search
+[ -L ~/.pi/agent/bin/web_fetch ] || ln -sf ~/.pi/agent/npm/henyo-pi-web/skills/web-tools/web_fetch.js ~/.pi/agent/bin/web_fetch
 ```
 
-> `pi install` automatically resolves npm dependencies (`defuddle`, `jsdom`). The two `ln -sf` commands make the scripts available on PATH so the agent can invoke them.
+> `pi install` automatically resolves npm dependencies (`defuddle`, `jsdom`). The two commands above create symlinks (skipping silently if they already exist) so the scripts are available on PATH.
 
 ## Usage
 
