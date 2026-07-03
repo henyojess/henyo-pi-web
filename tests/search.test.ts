@@ -1,0 +1,172 @@
+import { detectContext, buildProviderChain, CODING_SIGNALS } from '../shared/search/context';
+import { normalizeUrl, formatResults } from '../shared/format';
+import type { SearchResult } from '../shared/search/providers';
+
+// ─── detectContext ───────────────────────────────────────────────────────────
+
+describe('detectContext', () => {
+  it('returns general for empty query', () => {
+    expect(detectContext('')).toBe('general');
+  });
+
+  it('returns general for plain English query', () => {
+    expect(detectContext('what is the capital of France')).toBe('general');
+  });
+
+  it('returns general for single coding signal', () => {
+    expect(detectContext('const x = 5')).toBe('general');
+  });
+
+  it('returns coding for two coding signals', () => {
+    expect(detectContext('const async function')).toBe('coding');
+  });
+
+  it('returns coding for error messages', () => {
+    expect(detectContext('TypeError: cannot find module')).toBe('coding');
+  });
+
+  it('returns coding for npm related queries', () => {
+    expect(detectContext('npm install package')).toBe('coding');
+  });
+
+  it('returns general for npm as a word alone', () => {
+    expect(detectContext('npm is a package manager')).toBe('general');
+  });
+
+  it('returns coding for git related queries', () => {
+    expect(detectContext('git commit const x')).toBe('coding');
+  });
+
+  it('returns general for non-coding query with one signal', () => {
+    expect(detectContext('class schedule for today')).toBe('general');
+  });
+
+  it('handles mixed signals correctly', () => {
+    expect(detectContext('import async function from module')).toBe('coding');
+  });
+
+  it('exact pattern matches work', () => {
+    expect(detectContext('SyntaxError: unexpected token')).toBe('coding');
+    expect(detectContext('Traceback (most recent call last)')).toBe('general'); // only 1 signal
+    expect(detectContext('Traceback (most recent call last) Error: failed')).toBe('coding');
+  });
+});
+
+// ─── buildProviderChain ──────────────────────────────────────────────────────
+
+describe('buildProviderChain', () => {
+  const contexts = {
+    coding: {
+      duckduckgo: { priority: 1 },
+      stackoverflow: { priority: 1 },
+      npm: { priority: 1 },
+      github: { priority: 1 },
+    },
+    general: {
+      duckduckgo: { priority: 1 },
+      wikipedia: { priority: 1 },
+      jina: { priority: 2 },
+    },
+  };
+
+  it('returns sorted providers for coding context', () => {
+    const chain = buildProviderChain('coding', contexts);
+    expect(chain.length).toBe(4);
+    expect(chain.every(p => p.priority === 1)).toBe(true);
+  });
+
+  it('returns sorted providers for general context', () => {
+    const chain = buildProviderChain('general', contexts);
+    expect(chain.length).toBe(3);
+    expect(chain[0].priority).toBe(1);
+    expect(chain[chain.length - 1].priority).toBe(2);
+  });
+
+  it('returns empty array for missing context', () => {
+    const chain = buildProviderChain('nonexistent', contexts);
+    expect(chain.length).toBe(0);
+  });
+
+  it('SearXNG priority 0 replaces chain', () => {
+    const contextsOverride = {
+      custom: {
+        searxng: { priority: 0, url: 'http://localhost:8080' },
+        duckduckgo: { priority: 1 },
+      },
+    };
+    const chain = buildProviderChain('custom', contextsOverride);
+    expect(chain.length).toBe(1);
+    expect(chain[0].name).toBe('searxng');
+  });
+
+  it('providers are sorted by priority', () => {
+    const mixedContexts = {
+      mixed: {
+        jina: { priority: 3 },
+        duckduckgo: { priority: 1 },
+        wikipedia: { priority: 2 },
+      },
+    };
+    const chain = buildProviderChain('mixed', mixedContexts);
+    expect(chain.map(p => p.priority)).toEqual([1, 2, 3]);
+  });
+});
+
+// ─── normalizeUrl ────────────────────────────────────────────────────────────
+
+describe('normalizeUrl', () => {
+  it('removes trailing slashes', () => {
+    expect(normalizeUrl('https://example.com/')).toBe('https://example.com');
+  });
+
+  it('removes www', () => {
+    expect(normalizeUrl('https://www.example.com')).toBe('https://example.com');
+  });
+
+  it('lowercases url', () => {
+    expect(normalizeUrl('HTTPS://EXAMPLE.COM')).toBe('https://example.com');
+  });
+
+  it('handles http protocol', () => {
+    expect(normalizeUrl('http://www.example.com/')).toBe('https://example.com');
+  });
+
+  it('preserves path', () => {
+    expect(normalizeUrl('https://example.com/path/to/page')).toBe('https://example.com/path/to/page');
+  });
+});
+
+// ─── formatResults ───────────────────────────────────────────────────────────
+
+describe('formatResults', () => {
+  it('returns "No results found." for empty array', () => {
+    expect(formatResults([])).toBe('No results found.');
+  });
+
+  it('formats a single result', () => {
+    const results: SearchResult[] = [
+      { title: 'Test Title', url: 'https://example.com', snippet: 'A snippet' },
+    ];
+    const output = formatResults(results);
+    expect(output).toContain('1. Test Title');
+    expect(output).toContain('URL: https://example.com');
+    expect(output).toContain('A snippet');
+  });
+
+  it('includes source when present', () => {
+    const results: SearchResult[] = [
+      { title: 'Test', url: 'https://example.com', snippet: '', source: 'npm' },
+    ];
+    expect(formatResults(results)).toContain('Source: npm');
+  });
+
+  it('handles multiple results', () => {
+    const results: SearchResult[] = [
+      { title: 'First', url: 'https://first.com', snippet: '' },
+      { title: 'Second', url: 'https://second.com', snippet: '' },
+    ];
+    const output = formatResults(results);
+    expect(output).toContain('1. First');
+    expect(output).toContain('2. Second');
+  });
+});
