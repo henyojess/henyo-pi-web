@@ -13,15 +13,12 @@
   "files": [
     "index.ts",
     "shared/",
-    "skills/",
-    "tests/",
     "LICENSE",
     "README.md"
   ],
   "description": "Web search and fetch tools for Pi — DDG, Stack Overflow, Wikipedia, Defuddle extraction, and more.",
   "keywords": [
     "pi-package",
-    "pi-skill",
     "pi-extension"
   ],
   "dependencies": {
@@ -40,9 +37,6 @@
   "pi": {
     "extensions": [
       "index.ts"
-    ],
-    "skills": [
-      "skills/web-tools"
     ]
   }
 }

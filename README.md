@@ -9,44 +9,39 @@ Web search and content extraction tools for [Pi](https://github.com/earendil-wor
 **Ask your Pi agent:**
 
 ```
-Install the henyo-pi-web npm package and the web-tools skill
+Install the henyo-pi-web npm package
 ```
 
-Or run directly in your terminal:
+Or run directly:
 
 ```bash
 pi install npm:henyo-pi-web
-[ -L ~/.pi/agent/bin/web_search ] || ln -sf ~/.pi/agent/npm/henyo-pi-web/skills/web-tools/web_search.js ~/.pi/agent/bin/web_search
-[ -L ~/.pi/agent/bin/web_fetch ] || ln -sf ~/.pi/agent/npm/henyo-pi-web/skills/web-tools/web_fetch.js ~/.pi/agent/bin/web_fetch
 ```
 
-> `pi install` automatically resolves npm dependencies (`defuddle`, `jsdom`). The two commands above create symlinks (skipping silently if they already exist) so the scripts are available on PATH.
+> `pi install` automatically resolves npm dependencies (`defuddle`, `jsdom`) and registers two native tools: `web_search` and `web_fetch`.
 
-## Usage
+## Tools
 
-```bash
-/skill:web-tools
-```
+### `web_search`
 
-The skill provides two CLI scripts:
+Search the web using DuckDuckGo, Stack Overflow, npm, GitHub, Wikipedia, or Jina. Context-aware routing (coding vs general). Results cached 30 min.
 
-- **`web_search`** — Search the web via multiple providers (DuckDuckGo, Stack Overflow, npm, GitHub, Wikipedia, Jina)
-- **`web_fetch`** — Fetch and extract readable content from any URL (with Defuddle + Jina fallback)
+**Parameters:**
 
-### web_search
+- `query` (string) — Search query
+- `max` (integer, default 10) — Max results (1–50)
+- `context` (string, default "auto") — `"coding"`, `"general"`, or `"auto"`
+- `noCache` (boolean, default false) — Skip cache
 
-```bash
-web_search query "how to handle errors in React" --max 5
-web_search query "latest weather today" --max 3 --context general
-web_search query "TypeError: cannot read" --max 3 --context coding
-```
+### `web_fetch`
 
-### web_fetch
+Extract clean readable content from any URL. Uses Defuddle locally with Jina Reader fallback. Handles Cloudflare protection, SPAs, GitHub raw files. Cached 1 hour.
 
-```bash
-web_fetch url "https://example.com/article" --format json
-web_fetch url "https://github.com/user/repo/blob/main/README.md" --short
-```
+**Parameters:**
+
+- `url` (string) — URL to fetch
+- `timeout` (integer, default 15000) — Timeout in ms (1000–60000)
+- `noCache` (boolean, default false) — Skip cache
 
 ## Configuration
 
