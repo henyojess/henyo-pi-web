@@ -12,17 +12,21 @@ export async function fetchGitHubContent(html: string, url: string): Promise<{ t
   if (fileMatch) {
     const [, owner, repo, ref, filePath] = fileMatch;
 
-    const apiRes = await fetch(`https://raw.githubusercontent.com/${owner}/${repo}/${ref}/${filePath}`, {
-      headers: { 'User-Agent': pickRandom(USER_AGENTS) },
-    });
+    try {
+      const apiRes = await fetch(`https://raw.githubusercontent.com/${owner}/${repo}/${ref}/${filePath}`, {
+        headers: { 'User-Agent': pickRandom(USER_AGENTS) },
+      });
 
-    if (apiRes.ok) {
-      const content = await apiRes.text();
-      return {
-        title: `${owner}/${repo} — ${filePath}`,
-        bodyText: content,
-        source: 'github',
-      };
+      if (apiRes.ok) {
+        const content = await apiRes.text();
+        return {
+          title: `${owner}/${repo} — ${filePath}`,
+          bodyText: content,
+          source: 'github',
+        };
+      }
+    } catch {
+      // Fetch failed — fall through to return null
     }
   }
 

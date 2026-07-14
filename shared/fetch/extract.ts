@@ -52,7 +52,7 @@ export async function fetchWithJina(url: string, timeoutMs: number): Promise<{ t
 
   const dashIdx = text.indexOf('\n---\n');
   if (dashIdx > 0) {
-    bodyText = text.slice(dashIdx + 6);
+    bodyText = text.slice(dashIdx + 5);
   }
 
   return { title, bodyText };

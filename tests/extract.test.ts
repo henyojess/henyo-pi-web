@@ -38,12 +38,34 @@ describe('extractWithDefuddle', () => {
 });
 
 describe('fetchWithJina', () => {
-  it('fetches content via Jina Reader', async () => {
-    const result = await fetchWithJina('https://example.com', 15000);
-    expect(result.bodyText.length).toBeGreaterThan(0);
-  }, 20000);
+  beforeEach(() => {
+    vi.spyOn(global, 'fetch').mockImplementation(async (url: string) => {
+      return new Response(
+        'Title: Mocked Page\n---\nThis is mocked Jina content for testing.',
+        { status: 200, headers: { 'Content-Type': 'text/plain' } },
+      );
+    });
+  });
 
-  it('throws on bad URL', async () => {
-    await expect(fetchWithJina('https://this-domain-does-not-exist-xyz.invalid', 3000)).rejects.toThrow();
-  }, 10000);
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it('extracts title and body from Jina response', async () => {
+    const result = await fetchWithJina('https://example.com', 15000);
+    expect(result.title).toBe('Mocked Page');
+    expect(result.bodyText).toBe('This is mocked Jina content for testing.');
+  });
+
+  it('strips title prefix from body', async () => {
+    const result = await fetchWithJina('https://example.com', 15000);
+    expect(result.bodyText).not.toContain('Title:');
+  });
+
+  it('throws on non-OK response', async () => {
+    vi.spyOn(global, 'fetch').mockImplementation(async () => {
+      return new Response('Not found', { status: 404 });
+    });
+    await expect(fetchWithJina('https://example.com', 3000)).rejects.toThrow('HTTP 404');
+  });
 });

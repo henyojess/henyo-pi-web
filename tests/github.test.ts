@@ -26,13 +26,38 @@ describe('fetchGitHubContent', () => {
   });
 
   it('returns null for file URL when raw fetch fails', async () => {
-    const html = '<html></html>';
-    const url = 'https://github.com/user/repo/blob/main/README.md';
-    // This will try to fetch from raw.githubusercontent.com and fail in test env
-    const result = await fetchGitHubContent(html, url);
-    // Either null (fetch failed) or a result if network is available
-    // In test env without network, expect null
-    // We just verify it doesn't throw
-    expect(result === null || typeof result === 'object').toBe(true);
+    vi.spyOn(global, 'fetch').mockImplementation(async () => {
+      return new Response('Not found', { status: 404 });
+    });
+    const result = await fetchGitHubContent('<html></html>', 'https://github.com/user/repo/blob/main/README.md');
+    expect(result).toBeNull();
+  });
+
+  it('returns content for valid GitHub file URL', async () => {
+    vi.spyOn(global, 'fetch').mockImplementation(async () => {
+      return new Response('const x = 42;\nexport default x;', {
+        status: 200,
+        headers: { 'Content-Type': 'text/plain' },
+      });
+    });
+    const result = await fetchGitHubContent(
+      '<html></html>',
+      'https://github.com/facebook/react/blob/main/README.md',
+    );
+    expect(result).not.toBeNull();
+    expect(result!.title).toBe('facebook/react — README.md');
+    expect(result!.bodyText).toBe('const x = 42;\nexport default x;');
+    expect(result!.source).toBe('github');
+  });
+
+  it('returns null when raw fetch throws', async () => {
+    vi.spyOn(global, 'fetch').mockImplementation(async () => {
+      throw new Error('Network error');
+    });
+    const result = await fetchGitHubContent(
+      '<html></html>',
+      'https://github.com/user/repo/blob/main/file.txt',
+    );
+    expect(result).toBeNull();
   });
 });
