@@ -248,4 +248,114 @@ describe('fetchPage', () => {
     // Falls back to Defuddle since GitHub raw fetch failed
     expect(result.source).toBe('defuddle');
   });
+
+  it('caches result when noCache is false', async () => {
+    // Clear any existing cache entries that might interfere
+    const { createCache } = await import('../shared/cache');
+    const testCache = createCache(
+      `${process.env.HOME}/.pi/tools-cache/web_fetch`,
+      3600,
+      100,
+    );
+    testCache.clear();
+
+    mockHtmlFetch();
+    (extractWithDefuddle as any).mockResolvedValue({
+      bodyText: 'This content is long enough to pass the quality threshold for extraction and be considered a valid result by the pipeline. It has sufficient length and a proper title to avoid being flagged as a defuddle failure result during quality checks.',
+      title: 'Cache Test',
+      author: '', description: '', date: '', lang: '',
+    });
+    const uniqueUrl = 'https://example-cache-test.com';
+    const result = await fetchPage({ url: uniqueUrl, timeout: 10000, noCache: false, config });
+    expect(result.source).toBe('defuddle');
+    // Second call should hit cache — no fetch should be made
+    let fetchCalled = false;
+    vi.stubGlobal('fetch', async () => { fetchCalled = true; return new Response(''); });
+    const cachedResult = await fetchPage({ url: uniqueUrl, timeout: 10000, noCache: false, config });
+    expect(cachedResult.text).toBe(result.text);
+    expect(cachedResult.source).toBe(result.source);
+    expect(fetchCalled).toBe(false); // cached, no network call
+  });
+
+  it('falls through to raw when result is null after extraction block', async () => {
+    // Scenario: GitHub URL returns null, and isProtectedOrJsHeavy is false,
+    // Defuddle throws, Jina throws — result stays null, hits the fallback
+    (isGitHubUrl as any).mockReturnValue(true);
+    (fetchGitHubContent as any).mockResolvedValue(null);
+    (extractWithDefuddle as any).mockRejectedValue(new Error('defuddle error'));
+    (fetchWithJina as any).mockRejectedValue(new Error('jina error'));
+    const updates: any[] = [];
+    mockHtmlFetch();
+    const result = await fetchPage({ url: 'https://github.com/user/repo/blob/main/file.txt', timeout: 10000, noCache: true, config, onUpdate: (u) => updates.push(u) });
+    expect(result.source).toBe('raw');
+    expect(result.text).toContain('Content here');
+  });
+
+  it('handles Cloudflare warning with successful Defuddle (no Jina needed)', async () => {
+    const updates: any[] = [];
+    // Use HTML that triggers Cloudflare warning but NOT protection detection
+    mockFetch(async () => new Response(
+      '<html><body><form action="/checkpoint" id="challenge-form">Checking your browser before accessing the site.</form></body></html>',
+      { status: 200, headers: { 'Content-Type': 'text/html' } },
+    ));
+    (extractWithDefuddle as any).mockResolvedValue({
+      bodyText: 'This content is long enough to pass the quality threshold for extraction and be considered a valid result by the pipeline. It has sufficient length and a proper title to avoid being flagged as a defuddle failure result.',
+      title: 'Cloudflare Test',
+      author: '', description: '', date: '', lang: '',
+    });
+    const result = await fetchPage({ url: 'https://example.com', timeout: 10000, noCache: true, config, onUpdate: (u) => updates.push(u) });
+    // Only Cloudflare warning, no Defuddle error or Jina message
+    expect(updates).toHaveLength(1);
+    expect(updates[0].content[0].text).toBe('Warning: Site is behind Cloudflare protection.');
+    expect(result.source).toBe('defuddle');
+  });
+
+  it('uses custom headingThreshold for truncation', async () => {
+    mockHtmlFetch();
+    (extractWithDefuddle as any).mockResolvedValue({
+      bodyText: '# First Heading\nSome content here that makes the text longer.\n# Second Heading\nMore content here to add length.\n# Third Heading\nEven more content to reach the threshold.\n# Fourth Heading\nFinal section of content.',
+      title: 'Threshold Test',
+      author: '', description: '', date: '', lang: '',
+    });
+    const lowThresholdConfig: WebFetchConfig = {
+      ...config,
+      'heading-threshold': 10,
+    };
+    const result = await fetchPage({ url: 'https://example.com', timeout: 10000, noCache: true, config: lowThresholdConfig });
+    // With a very low threshold, truncation should kick in at the second heading
+    expect(result.truncated).toBe(true);
+  });
+
+  it('handles Cloudflare + Defuddle failure + Jina fallback', async () => {
+    const updates: any[] = [];
+    // Use HTML that triggers Cloudflare warning but NOT protection detection
+    mockFetch(async () => new Response(
+      '<html><body><form action="/checkpoint" id="challenge-form">Checking your browser before accessing the site.</form></body></html>',
+      { status: 200, headers: { 'Content-Type': 'text/html' } },
+    ));
+    (extractWithDefuddle as any).mockRejectedValue(new Error('defuddle error'));
+    (fetchWithJina as any).mockResolvedValue({ title: 'Jina', bodyText: 'Content from Jina.' });
+    const result = await fetchPage({ url: 'https://example.com', timeout: 10000, noCache: true, config, onUpdate: (u) => updates.push(u) });
+    expect(result.source).toBe('jina');
+    expect(updates).toHaveLength(3);
+    expect(updates[0].content[0].text).toBe('Warning: Site is behind Cloudflare protection.');
+    expect(updates[1].content[0].text).toContain('Defuddle error');
+    expect(updates[2].content[0].text).toContain('Jina Reader');
+  });
+
+  it('handles Defuddle failure with low quality content triggering Jina', async () => {
+    mockHtmlFetch();
+    // Defuddle returns content but with bad title (triggers isDefuddleFailure)
+    (extractWithDefuddle as any).mockResolvedValue({
+      bodyText: 'This content is long enough to pass the quality threshold for extraction and be considered a valid result by the pipeline.',
+      title: 'https://example.com', // bad title triggers isDefuddleFailure
+      author: '', description: '', date: '', lang: '',
+    });
+    (fetchWithJina as any).mockResolvedValue({ title: 'Jina Title', bodyText: 'Content from Jina.' });
+    const updates: any[] = [];
+    const result = await fetchPage({ url: 'https://example.com', timeout: 10000, noCache: true, config, onUpdate: (u) => updates.push(u) });
+    expect(result.source).toBe('jina');
+    expect(updates).toHaveLength(1);
+    expect(updates[0].content[0].text).toContain('low-quality content');
+  });
 });
