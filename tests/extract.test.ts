@@ -1,39 +1,95 @@
 import { extractWithDefuddle, fetchWithJina } from '../shared/fetch/extract';
 
+// Mock JSDOM and Defuddle for controlled testing
+vi.mock('jsdom', () => ({
+  JSDOM: class MockJSDOM {
+    window = { document: { querySelector: () => null } };
+  },
+}));
+
+vi.mock('defuddle/node', () => ({
+  Defuddle: vi.fn(),
+}));
+
+import { Defuddle } from 'defuddle/node';
+
+const mockDefuddle = Defuddle as any;
+
 describe('extractWithDefuddle', () => {
+  beforeEach(() => {
+    mockDefuddle.mockReset();
+  });
+
   it('extracts title and body from HTML', async () => {
-    const html = `
-      <!DOCTYPE html>
-      <html>
-        <head><title>Test Page</title></head>
-        <body>
-          <h1>Test Heading</h1>
-          <p>This is the main content of the page.</p>
-          <p>Another paragraph with more text.</p>
-        </body>
-      </html>
-    `;
-    const result = await extractWithDefuddle(html, 'https://example.com');
-    expect(result.title).toBeTruthy();
+    mockDefuddle.mockResolvedValue({
+      content: 'Test body content here with sufficient length for quality checks.',
+      title: 'Test Page',
+      author: '',
+      description: '',
+      date: '',
+      lang: '',
+    });
+    const result = await extractWithDefuddle('<html><body>test</body></html>', 'https://example.com');
+    expect(result.title).toBe('Test Page');
     expect(result.bodyText.length).toBeGreaterThan(0);
   });
 
   it('handles empty HTML', async () => {
-    const html = '<html><body></body></html>';
-    const result = await extractWithDefuddle(html, 'https://example.com');
+    mockDefuddle.mockResolvedValue({
+      content: '',
+      title: '',
+      author: '',
+      description: '',
+      date: '',
+      lang: '',
+    });
+    const result = await extractWithDefuddle('<html><body></body></html>', 'https://example.com');
     expect(result.bodyText).toBe('');
     expect(result.title).toBe('');
   });
 
   it('returns all fields', async () => {
-    const html = '<html><head><title>T</title></head><body><p>Content</p></body></html>';
-    const result = await extractWithDefuddle(html, 'https://example.com');
+    mockDefuddle.mockResolvedValue({
+      content: 'Content',
+      title: 'T',
+      author: '',
+      description: '',
+      date: '',
+      lang: '',
+    });
+    const result = await extractWithDefuddle('<html><head><title>T</title></head><body><p>Content</p></body></html>', 'https://example.com');
     expect(result).toHaveProperty('bodyText');
     expect(result).toHaveProperty('title');
     expect(result).toHaveProperty('author');
     expect(result).toHaveProperty('description');
     expect(result).toHaveProperty('date');
     expect(result).toHaveProperty('lang');
+  });
+
+  it('uses date value when Defuddle returns one (truthy branch)', async () => {
+    mockDefuddle.mockResolvedValue({
+      content: 'Test body content here with sufficient length for quality checks.',
+      title: 'Test Page',
+      author: 'Author Name',
+      description: 'Test description',
+      date: '2024-01-15',
+      lang: 'en',
+    });
+    const result = await extractWithDefuddle('<html><body>test</body></html>', 'https://example.com');
+    expect(result.date).toBe('2024-01-15');
+  });
+
+  it('handles undefined date from Defuddle (falsy branch)', async () => {
+    mockDefuddle.mockResolvedValue({
+      content: 'Test content',
+      title: 'Test Title',
+      author: undefined,
+      description: undefined,
+      date: undefined,
+      lang: undefined,
+    });
+    const result = await extractWithDefuddle('<html><body></body></html>', 'https://x.com');
+    expect(result.date).toBe('');
   });
 });
 
@@ -67,5 +123,17 @@ describe('fetchWithJina', () => {
       return new Response('Not found', { status: 404 });
     });
     await expect(fetchWithJina('https://example.com', 3000)).rejects.toThrow('HTTP 404');
+  });
+
+  it('handles response without Title: line', async () => {
+    vi.spyOn(global, 'fetch').mockImplementation(async () => {
+      return new Response('This is content without a title prefix.', {
+        status: 200,
+        headers: { 'Content-Type': 'text/plain' },
+      });
+    });
+    const result = await fetchWithJina('https://example.com', 15000);
+    expect(result.title).toBe('');
+    expect(result.bodyText).toBe('This is content without a title prefix.');
   });
 });

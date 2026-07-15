@@ -563,6 +563,22 @@ describe('searchNpm', () => {
     const results = await searchNpm('test');
     expect(results).toEqual([]);
   });
+
+  it('handles package with no description', async () => {
+    const noDescResponse = JSON.stringify({
+      objects: [
+        { package: { name: 'test-pkg', version: '1.0.0', description: null } },
+      ],
+    });
+    vi.spyOn(global, 'fetch').mockImplementation(async () => {
+      return new Response(noDescResponse, {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      });
+    });
+    const results = await searchNpm('test');
+    expect(results[0].snippet).toBe('');
+  });
 });
 
 describe('searchGitHub', () => {
@@ -624,6 +640,17 @@ describe('searchGitHub', () => {
     });
     const results = await searchGitHub('test');
     expect(results[0].snippet).toBe('No description');
+  });
+
+  it('returns empty array when no items key', async () => {
+    vi.spyOn(global, 'fetch').mockImplementation(async () => {
+      return new Response(JSON.stringify({ error: 'not found' }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      });
+    });
+    const results = await searchGitHub('test');
+    expect(results).toEqual([]);
   });
 });
 
@@ -698,6 +725,21 @@ describe('searchWikipedia', () => {
     expect(results[0].snippet).toBe('Programming language');
   });
 
+  it('skips pages when excerpt fetch fails', async () => {
+    vi.spyOn(global, 'fetch').mockImplementation(async (url: string) => {
+      if (url.includes('action=opensearch')) {
+        return new Response(JSON.stringify([null, ['Test'], ['https://en.wikipedia.org/wiki/Test'], ['Desc']]), {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' },
+        });
+      }
+      // Excerpt fetch fails
+      return new Response('error', { status: 500 });
+    });
+    const results = await searchWikipedia('test');
+    expect(results).toEqual([]);
+  });
+
   it('handles missing titles array', async () => {
     vi.spyOn(global, 'fetch').mockImplementation(async () => {
       return new Response(JSON.stringify([null, null, null, null]), {
@@ -707,6 +749,26 @@ describe('searchWikipedia', () => {
     });
     const results = await searchWikipedia('test');
     expect(results).toEqual([]);
+  });
+
+  it('uses empty string when both extract and description are missing', async () => {
+    const noExtractResponse = JSON.stringify({
+      query: { pages: { '12345': { title: 'Test' } } },
+    });
+    vi.spyOn(global, 'fetch').mockImplementation(async (url: string) => {
+      if (url.includes('action=opensearch')) {
+        return new Response(JSON.stringify([null, ['Test'], ['https://en.wikipedia.org/wiki/Test'], [null]]), {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' },
+        });
+      }
+      return new Response(noExtractResponse, {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      });
+    });
+    const results = await searchWikipedia('test');
+    expect(results[0].snippet).toBe('');
   });
 });
 
@@ -763,6 +825,32 @@ describe('searchJina', () => {
     expect(results[0].title).toBe('Untitled');
     expect(results[0].url).toBe('');
     expect(results[0].snippet).toBe('just content');
+  });
+
+  it('returns empty array when no results key', async () => {
+    const noResultsResponse = JSON.stringify({ error: 'no results key' });
+    vi.spyOn(global, 'fetch').mockImplementation(async () => {
+      return new Response(noResultsResponse, {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      });
+    });
+    const results = await searchJina('test');
+    expect(results).toEqual([]);
+  });
+
+  it('handles null content field', async () => {
+    const nullContentResponse = JSON.stringify({
+      results: [{ title: 'Test', url: 'https://example.com', content: null }],
+    });
+    vi.spyOn(global, 'fetch').mockImplementation(async () => {
+      return new Response(nullContentResponse, {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      });
+    });
+    const results = await searchJina('test');
+    expect(results[0].snippet).toBe('');
   });
 });
 
@@ -827,6 +915,67 @@ describe('searchSearXNG', () => {
     const results = await searchSearXNG('https://searx.local', 'test');
     expect(results).toEqual([]);
   });
+
+  it('returns empty array on HTTP error', async () => {
+    vi.spyOn(global, 'fetch').mockImplementation(async () => {
+      return new Response('Internal Server Error', { status: 500 });
+    });
+    const results = await searchSearXNG('https://searx.local', 'test');
+    expect(results).toEqual([]);
+  });
+
+  it('returns empty array when no results key', async () => {
+    const noResultsResponse = JSON.stringify({
+      error: 'no results key',
+    });
+    vi.spyOn(global, 'fetch').mockImplementation(async () => {
+      return new Response(noResultsResponse, {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      });
+    });
+    const results = await searchSearXNG('https://searx.local', 'test');
+    expect(results).toEqual([]);
+  });
+
+  it('handles null content field', async () => {
+    const nullContentResponse = JSON.stringify({
+      results: [
+        {
+          title: 'Test',
+          url: 'https://example.com',
+          content: null,
+        },
+      ],
+    });
+    vi.spyOn(global, 'fetch').mockImplementation(async () => {
+      return new Response(nullContentResponse, {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      });
+    });
+    const results = await searchSearXNG('https://searx.local', 'test');
+    expect(results[0].snippet).toBe('');
+  });
+
+  it('handles empty url field in result', async () => {
+    const emptyUrlResponse = JSON.stringify({
+      results: [
+        {
+          title: 'Test',
+          content: 'Some content',
+        },
+      ],
+    });
+    vi.spyOn(global, 'fetch').mockImplementation(async () => {
+      return new Response(emptyUrlResponse, {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      });
+    });
+    const results = await searchSearXNG('https://searx.local', 'test');
+    expect(results[0].url).toBe('');
+  });
 });
 
 // ─── Phase 5: PROVIDER_MAP (~3 tests) ──────────────────────────────────────
@@ -878,5 +1027,56 @@ describe('detectContext edge cases', () => {
     for (const signal of CODING_SIGNALS) {
       expect(signal instanceof RegExp).toBe(true);
     }
+  });
+});
+
+describe('searchSearXNG — edge cases', () => {
+  it('returns empty array when !url', async () => {
+    const results = await searchSearXNG('query', '');
+    expect(results).toEqual([]);
+  });
+
+  it('returns empty array when !res.ok', async () => {
+    vi.spyOn(global, 'fetch').mockImplementation(async () => {
+      return new Response('Not found', { status: 404 });
+    });
+    const results = await searchSearXNG('query', 'https://searx.be/search');
+    expect(results).toEqual([]);
+  });
+
+  it('returns empty array on malformed JSON', async () => {
+    vi.spyOn(global, 'fetch').mockImplementation(async () => {
+      return new Response('not json', { status: 200 });
+    });
+    const results = await searchSearXNG('query', 'https://searx.be/search');
+    expect(results).toEqual([]);
+  });
+
+  it('returns empty array when network error', async () => {
+    vi.spyOn(global, 'fetch').mockImplementation(async () => {
+      throw new Error('Network error');
+    });
+    const results = await searchSearXNG('query', 'https://searx.be/search');
+    expect(results).toEqual([]);
+  });
+});
+
+describe('searchNpm — edge cases', () => {
+  it('returns empty array on network error', async () => {
+    vi.spyOn(global, 'fetch').mockImplementation(async () => {
+      throw new Error('Network error');
+    });
+    const results = await searchNpm('test');
+    expect(results).toEqual([]);
+  });
+});
+
+describe('searchWikipedia — edge cases', () => {
+  it('returns empty array on network error', async () => {
+    vi.spyOn(global, 'fetch').mockImplementation(async () => {
+      throw new Error('Network error');
+    });
+    const results = await searchWikipedia('test');
+    expect(results).toEqual([]);
   });
 });
