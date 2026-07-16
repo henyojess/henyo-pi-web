@@ -14,6 +14,7 @@ export interface WebFetchConfig {
   'max-delay'?: number;
   'cache-max-files'?: number;
   'heading-threshold'?: number;
+  'content-threshold'?: number;
 }
 export interface Settings {
   'web-search': WebSearchConfig;
@@ -30,6 +31,7 @@ const DEFAULTS: Settings = {
     'max-delay': 3000,
     'cache-max-files': 100,
     'heading-threshold': 40000,
+    'content-threshold': 32000,
   },
   'web-search': {
     'default-context': 'general',
