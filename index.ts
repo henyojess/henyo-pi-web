@@ -167,6 +167,26 @@ export default function (pi: ExtensionAPI) {
           onUpdate,
         });
 
+        // Handle oversized content — return metadata only, let agent decide
+        if (result.oversized) {
+          const sizeKB = (result.contentLength! / 1024).toFixed(1);
+          return {
+            content: [{
+              type: "text",
+              text: `[Cached — ${sizeKB} KB]\n\nURL: ${result.resolvedUrl}\nTitle: ${result.title}\nSource: ${result.source}\nCache: ${result.cacheFilePath}]`,
+            }],
+            details: {
+              url: result.resolvedUrl,
+              title: result.title,
+              source: result.source,
+              cached: true,
+              cacheFilePath: result.cacheFilePath,
+              contentLength: result.contentLength,
+              contentLengthKB: Number(sizeKB),
+            },
+          };
+        }
+
         return {
           content: [{ type: "text", text: result.text }],
           details: {
