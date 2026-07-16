@@ -3,6 +3,10 @@ import { createHash } from 'node:crypto';
 
 export interface CacheEntry<T> { data: T; timestamp: number; }
 
+export function keyToPath(dir: string, key: string): string {
+  return `${dir}/${createHash('sha256').update(key).digest('hex')}.json`;
+}
+
 export function createCache<T>(dir: string, ttlSeconds: number, maxFiles?: number) {
   function ensureDir() {
     if (!fs.existsSync(dir)) {
@@ -10,8 +14,8 @@ export function createCache<T>(dir: string, ttlSeconds: number, maxFiles?: numbe
     }
   }
 
-  function keyToPath(key: string): string {
-    return `${dir}/${createHash('sha256').update(key).digest('hex')}.json`;
+  function cachePath(key: string): string {
+    return keyToPath(dir, key);
   }
 
   function listFiles() {
@@ -37,13 +41,13 @@ export function createCache<T>(dir: string, ttlSeconds: number, maxFiles?: numbe
 
   return {
     get(key: string): T | null {
-      const cachePath = keyToPath(key);
-      if (!fs.existsSync(cachePath)) return null;
+      const cachePathLocal = cachePath(key);
+      if (!fs.existsSync(cachePathLocal)) return null;
       try {
-        const data = JSON.parse(fs.readFileSync(cachePath, 'utf8')) as CacheEntry<T>;
+        const data = JSON.parse(fs.readFileSync(cachePathLocal, 'utf8')) as CacheEntry<T>;
         const age = (Date.now() - data.timestamp) / 1000;
         if (age > ttlSeconds) {
-          fs.unlinkSync(cachePath);
+          fs.unlinkSync(cachePathLocal);
           return null;
         }
         return data.data;
@@ -56,7 +60,7 @@ export function createCache<T>(dir: string, ttlSeconds: number, maxFiles?: numbe
       ensureDir();
       evictIfNecessary();
       const entry: CacheEntry<T> = { data, timestamp: Date.now() };
-      fs.writeFileSync(keyToPath(key), JSON.stringify(entry), 'utf8');
+      fs.writeFileSync(cachePath(key), JSON.stringify(entry), 'utf8');
     },
 
     evict(): void {
