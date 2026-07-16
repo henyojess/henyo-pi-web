@@ -358,4 +358,129 @@ describe('fetchPage', () => {
     expect(updates).toHaveLength(1);
     expect(updates[0].content[0].text).toContain('low-quality content');
   });
+
+  // ─── Tests for content-threshold (oversized content) ───────────────────
+
+  it('returns oversized result when content exceeds content-threshold', async () => {
+    mockHtmlFetch();
+    const largeContent = 'x'.repeat(150000); // 150KB, exceeds default 32KB threshold
+    (extractWithDefuddle as any).mockResolvedValue({
+      bodyText: largeContent,
+      title: 'Large Page',
+      author: '', description: '', date: '', lang: '',
+    });
+    const result = await fetchPage({
+      url: 'https://example.com/large',
+      timeout: 10000,
+      noCache: true,
+      config: { ...config, 'content-threshold': 32000 },
+    });
+    expect(result.oversized).toBe(true);
+    expect(result.cacheKey).toBeDefined();
+    expect(result.cacheFilePath).toBeDefined();
+    expect(result.cacheFilePath).toContain('.pi/tools-cache/web_fetch/');
+    expect(result.cacheFilePath).toContain('.json');
+    expect(result.contentLength).toBe(largeContent.length);
+  });
+
+  it('returns normal result when content is under content-threshold', async () => {
+    mockHtmlFetch();
+    const smallContent = 'Small content'.repeat(100); // ~1200 chars, well under 32KB
+    (extractWithDefuddle as any).mockResolvedValue({
+      bodyText: smallContent,
+      title: 'Small Page',
+      author: '', description: '', date: '', lang: '',
+    });
+    const result = await fetchPage({
+      url: 'https://example.com/small',
+      timeout: 10000,
+      noCache: true,
+      config: { ...config, 'content-threshold': 32000 },
+    });
+    expect(result.oversized).toBeUndefined();
+    expect(result.cacheKey).toBeUndefined();
+    expect(result.contentLength).toBeUndefined();
+    expect(result.text).toBe(smallContent);
+  });
+
+  it('uses custom content-threshold from config', async () => {
+    mockHtmlFetch();
+    const mediumContent = 'y'.repeat(50000); // 50KB
+    (extractWithDefuddle as any).mockResolvedValue({
+      bodyText: mediumContent,
+      title: 'Medium Page',
+      author: '', description: '', date: '', lang: '',
+    });
+    // With a 30KB threshold, 50KB should be oversized
+    const lowThresholdConfig: WebFetchConfig = { ...config, 'content-threshold': 30000 };
+    const result = await fetchPage({
+      url: 'https://example.com/medium',
+      timeout: 10000,
+      noCache: true,
+      config: lowThresholdConfig,
+    });
+    expect(result.oversized).toBe(true);
+    expect(result.contentLength).toBe(mediumContent.length);
+    expect(result.cacheFilePath).toBeDefined();
+  });
+
+  it('caches oversized result with noCache: false', async () => {
+    const { createCache } = await import('../shared/cache');
+    const testCache = createCache(
+      `${process.env.HOME}/.pi/tools-cache/web_fetch`,
+      3600,
+      100,
+    );
+    testCache.clear();
+
+    mockHtmlFetch();
+    const largeContent = 'z'.repeat(120000);
+    (extractWithDefuddle as any).mockResolvedValue({
+      bodyText: largeContent,
+      title: 'Cached Large',
+      author: '', description: '', date: '', lang: '',
+    });
+    const uniqueUrl = 'https://example-cache-large.com';
+    const result = await fetchPage({
+      url: uniqueUrl,
+      timeout: 10000,
+      noCache: false,
+      config: { ...config, 'content-threshold': 32000 },
+    });
+    expect(result.oversized).toBe(true);
+    expect(result.cacheKey).toBeDefined();
+
+    // Second call should hit cache
+    let fetchCalled = false;
+    vi.stubGlobal('fetch', async () => { fetchCalled = true; return new Response(''); });
+    const cachedResult = await fetchPage({
+      url: uniqueUrl,
+      timeout: 10000,
+      noCache: false,
+      config: { ...config, 'content-threshold': 32000 },
+    });
+    expect(cachedResult.text).toBe(result.text);
+    expect(cachedResult.cacheKey).toBe(result.cacheKey);
+    expect(fetchCalled).toBe(false);
+  });
+
+  it('returns default content-threshold when not configured', async () => {
+    mockHtmlFetch();
+    const largeContent = 'w'.repeat(150000);
+    (extractWithDefuddle as any).mockResolvedValue({
+      bodyText: largeContent,
+      title: 'Default Threshold',
+      author: '', description: '', date: '', lang: '',
+    });
+    // No content-threshold set — should use default 32KB
+    const result = await fetchPage({
+      url: 'https://example.com/default',
+      timeout: 10000,
+      noCache: true,
+      config,
+    });
+    expect(result.oversized).toBe(true);
+    expect(result.contentLength).toBe(largeContent.length);
+    expect(result.cacheFilePath).toBeDefined();
+  });
 });

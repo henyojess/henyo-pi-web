@@ -1,4 +1,4 @@
-import { createCache } from '../cache';
+import { createCache, keyToPath } from '../cache';
 import type { WebFetchConfig } from '../config';
 import { pickRandom, delay, USER_AGENTS, ACCEPT_LANGUAGES } from '../user-agents';
 import { extractWithDefuddle, fetchWithJina } from './extract';
@@ -23,6 +23,10 @@ export interface FetchResult {
   title: string;
   source: string;
   truncated: boolean;
+  cacheKey?: string;
+  cacheFilePath?: string;
+  contentLength?: number;
+  oversized?: boolean;
 }
 
 export async function fetchPage(options: FetchOptions): Promise<FetchResult> {
@@ -31,6 +35,7 @@ export async function fetchPage(options: FetchOptions): Promise<FetchResult> {
   const minDelay = config['min-delay'] ?? 1000;
   const maxDelay = config['max-delay'] ?? 3000;
   const headingThreshold = config['heading-threshold'] ?? 40000;
+  const contentThreshold = config['content-threshold'] ?? 100000;
   const cacheMaxFiles = config['cache-max-files'] ?? 100;
 
   const cache = createCache(
@@ -152,6 +157,33 @@ export async function fetchPage(options: FetchOptions): Promise<FetchResult> {
 
   // Step 3: Smart truncation
   const truncatedResult = smartTruncate(result.bodyText, result.title || '', headingThreshold);
+
+  // Step 4: Check if content exceeds threshold
+  const contentLength = truncatedResult.bodyText.length;
+  if (contentLength > contentThreshold) {
+    const cacheFilePath = keyToPath(
+      `${process.env.HOME}/.pi/tools-cache/web_fetch`,
+      cacheKey,
+    );
+    const fetchResult: FetchResult = {
+      text: truncatedResult.bodyText,
+      resolvedUrl,
+      title: truncatedResult.title || '',
+      source: result.source || 'defuddle',
+      truncated: truncatedResult.truncated,
+      cacheKey: cacheKey,
+      cacheFilePath: cacheFilePath,
+      contentLength: contentLength,
+      oversized: true,
+    };
+
+    // Cache the full result
+    if (!noCache) {
+      cache.put(cacheKey, fetchResult);
+    }
+
+    return fetchResult;
+  }
 
   const fetchResult: FetchResult = {
     text: truncatedResult.bodyText,
