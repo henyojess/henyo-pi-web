@@ -7,6 +7,10 @@ export interface ContextConfig { [provider: string]: ProviderConfig; }
 export interface WebSearchConfig {
   'default-context'?: string;
   contexts?: ContextConfig;
+  'rate-limit-cooldowns'?: Record<string, number>;
+  'max-per-domain'?: number;
+  'ranking-enabled'?: boolean;
+  'api-key'?: string;
 }
 export interface WebFetchConfig {
   jinaEnabled?: boolean;

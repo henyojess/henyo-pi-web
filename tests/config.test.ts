@@ -115,4 +115,120 @@ describe('loadConfig', () => {
 
     fs.existsSync = origExistsSync;
   });
+
+  it('loads rate-limit-cooldowns from user settings', async () => {
+    const origExistsSync = fs.existsSync;
+    const origReadFileSync = fs.readFileSync;
+
+    const customSettings = {
+      'web-search': {
+        'rate-limit-cooldowns': { duckduckgo: 900_000 },
+      },
+    };
+
+    fs.existsSync = vi.fn((p: string) => {
+      if (p === settingsPath) return true;
+      return origExistsSync(p);
+    });
+
+    fs.readFileSync = vi.fn((p: string, enc: string) => {
+      if (p === settingsPath) return JSON.stringify(customSettings);
+      return origReadFileSync(p, enc);
+    });
+
+    const { loadConfig: freshLoad } = await import('../shared/config.ts');
+    const config = freshLoad();
+
+    expect(config['web-search']['rate-limit-cooldowns']).toEqual({ duckduckgo: 900_000 });
+
+    fs.existsSync = origExistsSync;
+    fs.readFileSync = origReadFileSync;
+  });
+
+  it('loads max-per-domain from user settings', async () => {
+    const origExistsSync = fs.existsSync;
+    const origReadFileSync = fs.readFileSync;
+
+    const customSettings = {
+      'web-search': {
+        'max-per-domain': 5,
+      },
+    };
+
+    fs.existsSync = vi.fn((p: string) => {
+      if (p === settingsPath) return true;
+      return origExistsSync(p);
+    });
+
+    fs.readFileSync = vi.fn((p: string, enc: string) => {
+      if (p === settingsPath) return JSON.stringify(customSettings);
+      return origReadFileSync(p, enc);
+    });
+
+    const { loadConfig: freshLoad } = await import('../shared/config.ts');
+    const config = freshLoad();
+
+    expect(config['web-search']['max-per-domain']).toBe(5);
+
+    fs.existsSync = origExistsSync;
+    fs.readFileSync = origReadFileSync;
+  });
+
+  it('loads ranking-enabled from user settings', async () => {
+    const origExistsSync = fs.existsSync;
+    const origReadFileSync = fs.readFileSync;
+
+    const customSettings = {
+      'web-search': {
+        'ranking-enabled': false,
+      },
+    };
+
+    fs.existsSync = vi.fn((p: string) => {
+      if (p === settingsPath) return true;
+      return origExistsSync(p);
+    });
+
+    fs.readFileSync = vi.fn((p: string, enc: string) => {
+      if (p === settingsPath) return JSON.stringify(customSettings);
+      return origReadFileSync(p, enc);
+    });
+
+    const { loadConfig: freshLoad } = await import('../shared/config.ts');
+    const config = freshLoad();
+
+    expect(config['web-search']['ranking-enabled']).toBe(false);
+
+    fs.existsSync = origExistsSync;
+    fs.readFileSync = origReadFileSync;
+  });
+
+  it('loads api-key from user settings', async () => {
+    const origExistsSync = fs.existsSync;
+    const origReadFileSync = fs.readFileSync;
+
+    const customSettings = {
+      'web-search': {
+        'api-key': 'my-secret-key',
+      },
+    };
+
+    fs.existsSync = vi.fn((p: string) => {
+      if (p === settingsPath) return true;
+      return origExistsSync(p);
+    });
+
+    fs.readFileSync = vi.fn((p: string, enc: string) => {
+      if (p === settingsPath) return JSON.stringify(customSettings);
+      return origReadFileSync(p, enc);
+    });
+
+    const { loadConfig: freshLoad } = await import('../shared/config.ts');
+    const config = freshLoad();
+
+    expect(config['web-search']['api-key']).toBe('my-secret-key');
+
+    fs.existsSync = origExistsSync;
+    fs.readFileSync = origReadFileSync;
+  });
 });
