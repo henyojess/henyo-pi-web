@@ -178,7 +178,76 @@ export async function searchDuckDuckGo(query: string): Promise<SearchResult[]> {
 
 // ─── StackOverflow ───────────────────────────────────────────────────────────
 
+class StackOverflowAPIError extends Error {
+  constructor(message: string, public quotaRemaining: number) {
+    super(message);
+    this.name = 'StackOverflowAPIError';
+  }
+}
+
+export async function searchStackOverflowAPI(query: string, apiKey?: string): Promise<SearchResult[]> {
+  const params = new URLSearchParams({
+    q: query,
+    order: 'desc',
+    sort: 'relevance',
+    site: 'stackoverflow',
+    filter: 'withbody',
+    pagesize: '10',
+  });
+
+  let url = `https://api.stackexchange.com/2.3/search?${params}`;
+  if (apiKey) {
+    url += `&key=${apiKey}`;
+  }
+
+  const res = await fetch(url, {
+    headers: { 'User-Agent': pickRandom(USER_AGENTS) },
+  });
+
+  if (!res.ok) throw new Error(`StackOverflow API HTTP ${res.status}`);
+  const data = await res.json();
+
+  // Check quota
+  const quotaRemaining = (data as any).quota_remaining;
+  if (quotaRemaining === 0) {
+    throw new StackOverflowAPIError('StackOverflow API rate limited', 0);
+  }
+
+  const items = (data.items || []).slice(0, 10);
+  return items.map((item: any) => {
+    // Strip HTML tags except <code>
+    let body = item.body || '';
+    body = body.replace(/<(?!\/?code[^>]*>)[^>]*>/g, '');
+    body = body.replace(/<code[^>]*>([^<]*)<\/code>/g, '$1');
+
+    return {
+      title: item.title,
+      url: item.link || `https://stackoverflow.com/questions/${item.question_id}`,
+      snippet: body.substring(0, 300),
+      source: 'stackoverflow',
+      domain: 'stackoverflow.com',
+    };
+  });
+}
+
 export async function searchStackOverflow(query: string): Promise<SearchResult[]> {
+  await delay(1500 + Math.random() * 2000);
+
+  // Try API first
+  try {
+    return await searchStackOverflowAPI(query);
+  } catch (err) {
+    if (err instanceof StackOverflowAPIError) {
+      // Rate limited — set cooldown and fall back to scraper
+      rateLimitStore.setCooldown('stackoverflow', DEFAULT_RATE_LIMIT_COOLDOWNS.stackoverflow);
+    }
+    // Fall back to scraper
+  }
+
+  return searchStackOverflowScraper(query);
+}
+
+async function searchStackOverflowScraper(query: string): Promise<SearchResult[]> {
   await delay(1500 + Math.random() * 2000);
 
   const controller = new AbortController();
@@ -216,6 +285,7 @@ export async function searchStackOverflow(query: string): Promise<SearchResult[]
         url: url.split('?')[0],
         snippet,
         source: 'stackoverflow',
+        domain: 'stackoverflow.com',
       });
     }
   }

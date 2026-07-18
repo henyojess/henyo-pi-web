@@ -1,6 +1,7 @@
 import {
   searchDuckDuckGo,
   searchStackOverflow,
+  searchStackOverflowAPI,
   searchNpm,
   searchGitHub,
   searchWikipedia,
@@ -1038,6 +1039,64 @@ describe('DDG CAPTCHA detection', () => {
   });
 });
 
+
+// ─── StackOverflow API tests ────────────────────────────────────────────────
+
+describe('searchStackOverflowAPI', () => {
+  it('returns results for known package', async () => {
+    vi.spyOn(global, 'fetch').mockImplementation(async () => {
+      return new Response(JSON.stringify({
+        items: [{
+          question_id: 12345,
+          title: 'Test Question',
+          body: '<p>This is a <b>test</b> body</p>',
+          link: 'https://stackoverflow.com/questions/12345',
+        }],
+        quota_remaining: 100,
+      }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      });
+    });
+    const results = await searchStackOverflowAPI('test query');
+    expect(results.length).toBeGreaterThan(0);
+    expect(results[0].title).toBe('Test Question');
+    expect(results[0].domain).toBe('stackoverflow.com');
+  });
+
+  it('strips HTML tags except code', async () => {
+    vi.spyOn(global, 'fetch').mockImplementation(async () => {
+      return new Response(JSON.stringify({
+        items: [{
+          question_id: 1,
+          title: 'Test',
+          body: '<p>Hello <b>world</b> <code>code</code> here</p>',
+          link: 'https://stackoverflow.com/questions/1',
+        }],
+        quota_remaining: 100,
+      }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      });
+    });
+    const results = await searchStackOverflowAPI('test');
+    expect(results[0].snippet).toContain('world');
+    expect(results[0].snippet).toContain('code');
+  });
+
+  it('throws on quota exhaustion', async () => {
+    vi.spyOn(global, 'fetch').mockImplementation(async () => {
+      return new Response(JSON.stringify({
+        items: [],
+        quota_remaining: 0,
+      }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      });
+    });
+    await expect(searchStackOverflowAPI('test')).rejects.toThrow('StackOverflow API rate limited');
+  });
+});
 // ─── extractDomain tests ─────────────────────────────────────────────────────
 
 describe('extractDomain', () => {
