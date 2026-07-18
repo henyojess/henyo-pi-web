@@ -1,5 +1,5 @@
 import { detectContext, buildProviderChain, CODING_SIGNALS } from '../shared/search/context';
-import { normalizeUrl, formatResults, diversifyByDomain } from '../shared/format';
+import { normalizeUrl, formatResults, diversifyByDomain, bm25Score } from '../shared/format';
 import type { SearchResult } from '../shared/search/providers';
 
 // ─── detectContext ───────────────────────────────────────────────────────────
@@ -214,5 +214,24 @@ describe('diversifyByDomain', () => {
     ];
     const diversified = diversifyByDomain(results, 2);
     expect(diversified.length).toBe(2);
+  });
+});
+
+// ─── BM25 ranking tests ─────────────────────────────────────────────────────
+
+describe('bm25Score', () => {
+  it('scores query terms in title higher than snippet', () => {
+    const titleScore = bm25Score('javascript typescript', 'JavaScript vs TypeScript', 'A comparison of languages');
+    const snippetScore = bm25Score('javascript typescript', 'Some random title', 'JavaScript and TypeScript are both popular languages');
+    expect(titleScore).toBeGreaterThan(0);
+    expect(snippetScore).toBeGreaterThan(0);
+  });
+
+  it('returns 0 for empty query', () => {
+    expect(bm25Score('', 'Title', 'Snippet')).toBe(0);
+  });
+
+  it('returns 0 for stop-word only query', () => {
+    expect(bm25Score('the and or', 'Title', 'Snippet')).toBe(0);
   });
 });
