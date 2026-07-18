@@ -7,6 +7,7 @@ import {
   searchJina,
   searchSearXNG,
   PROVIDER_MAP,
+  extractDomain,
 } from '../shared/search/providers';
 import { detectContext, CODING_SIGNALS } from '../shared/search/context';
 import type { SearchResult } from '../shared/search/providers';
@@ -1034,6 +1035,26 @@ describe('DDG CAPTCHA detection', () => {
     });
     const results = await searchDuckDuckGo('test');
     expect(results).toEqual([]);
+  });
+});
+
+// ─── extractDomain tests ─────────────────────────────────────────────────────
+
+describe('extractDomain', () => {
+  it('extracts domain from https URL', () => {
+    expect(extractDomain('https://example.com/path')).toBe('example.com');
+  });
+
+  it('extracts domain from http URL', () => {
+    expect(extractDomain('http://test.org')).toBe('test.org');
+  });
+
+  it('returns undefined for invalid URL', () => {
+    expect(extractDomain('not-a-url')).toBeUndefined();
+  });
+
+  it('returns undefined for empty string', () => {
+    expect(extractDomain('')).toBeUndefined();
   });
 });
 

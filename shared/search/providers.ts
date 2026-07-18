@@ -42,6 +42,17 @@ async function withRetry<T>(
   throw lastError;
 }
 
+// ─── Domain extraction ───────────────────────────────────────────────────────
+
+export function extractDomain(url: string): string | undefined {
+  try {
+    const parsed = new URL(url);
+    return parsed.hostname;
+  } catch {
+    return undefined;
+  }
+}
+
 // ─── DuckDuckGo ──────────────────────────────────────────────────────────────
 
 export async function searchDuckDuckGo(query: string): Promise<SearchResult[]> {
@@ -142,6 +153,7 @@ export async function searchDuckDuckGo(query: string): Promise<SearchResult[]> {
         title: title || 'Untitled',
         url: actualUrl || redirectUrl || '',
         snippet,
+        domain: extractDomain(actualUrl || redirectUrl || ''),
       });
     }
   }
@@ -155,6 +167,7 @@ export async function searchDuckDuckGo(query: string): Promise<SearchResult[]> {
         title: 'Direct Answer',
         url: '—',
         snippet: text,
+        domain: undefined,
       });
     }
   }
