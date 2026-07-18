@@ -275,23 +275,44 @@ export async function searchWikipedia(query: string): Promise<SearchResult[]> {
     const searchData = await searchRes.json();
     const [titles, urls, descriptions] = searchData.slice(1);
 
-    if (!titles) return [];
+    if (!titles || titles.length === 0) return [];
 
+    // Use batch API to fetch all extracts in one request
+    const batchRes = await fetch(
+      `https://en.wikipedia.org/w/api.php?action=query&titles=${encodeURIComponent(titles.join('|'))}&prop=extracts&exintro=true&exsentences=0&explaintext=true&format=json`,
+      { headers: { 'User-Agent': pickRandom(USER_AGENTS) } }
+    );
+    if (!batchRes.ok) {
+      // Fallback: use descriptions only
+      return titles.map((title: string, i: number) => ({
+        title: title.substring(0, 200),
+        url: urls[i] || '',
+        snippet: descriptions[i] || '',
+        source: 'wikipedia',
+      }));
+    }
+
+    const batchData = await batchRes.json();
+    const pages = batchData.query.pages;
     const results: SearchResult[] = [];
-    for (let i = 0; i < titles.length; i++) {
-      const excerptRes = await fetch(
-        `https://en.wikipedia.org/w/api.php?action=query&titles=${encodeURIComponent(titles[i])}&prop=extracts&exintro=true&explaintext=true&format=json`,
-        { headers: { 'User-Agent': pickRandom(USER_AGENTS) } }
-      );
-      if (!excerptRes.ok) continue;
-      const exData = await excerptRes.json();
-      const pages = exData.query.pages;
-      const pageId = Object.keys(pages)[0];
-      const extract = pages[pageId]?.extract || '';
 
+    for (let i = 0; i < titles.length; i++) {
+      const pageId = Object.keys(pages).find(k => pages[k].title === titles[i]);
+      if (!pageId) {
+        // Page not found in response
+        results.push({
+          title: titles[i].substring(0, 200),
+          url: urls[i] || '',
+          snippet: descriptions[i] || '',
+          source: 'wikipedia',
+        });
+        continue;
+      }
+
+      const extract = pages[pageId].extract || '';
       results.push({
-        title: titles[i],
-        url: urls[i],
+        title: titles[i].substring(0, 200),
+        url: urls[i] || '',
         snippet: extract ? extract.substring(0, 300) + (extract.length > 300 ? '...' : '') : descriptions[i] || '',
         source: 'wikipedia',
       });

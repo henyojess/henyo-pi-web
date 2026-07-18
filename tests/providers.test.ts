@@ -725,7 +725,7 @@ describe('searchWikipedia', () => {
     expect(results[0].snippet).toBe('Programming language');
   });
 
-  it('skips pages when excerpt fetch fails', async () => {
+  it('falls back to descriptions when batch API fails', async () => {
     vi.spyOn(global, 'fetch').mockImplementation(async (url: string) => {
       if (url.includes('action=opensearch')) {
         return new Response(JSON.stringify([null, ['Test'], ['https://en.wikipedia.org/wiki/Test'], ['Desc']]), {
@@ -733,11 +733,12 @@ describe('searchWikipedia', () => {
           headers: { 'Content-Type': 'application/json' },
         });
       }
-      // Excerpt fetch fails
+      // Batch API fails
       return new Response('error', { status: 500 });
     });
     const results = await searchWikipedia('test');
-    expect(results).toEqual([]);
+    expect(results.length).toBe(1);
+    expect(results[0].snippet).toBe('Desc');
   });
 
   it('handles missing titles array', async () => {
