@@ -99,9 +99,12 @@ export default function (pi: ExtensionAPI) {
             let results: SearchResult[];
             if (provider.name === 'searxng') {
               const searxngConfig = (searchConfig.contexts || {})[contextName]?.searxng || {};
-              results = await provider.fn(searxngConfig.url || '', query);
+              results = await provider.fn(searxngConfig.url || '', query, signal);
+            } else if (provider.name === 'stackoverflow') {
+              const apiKey = (searchConfig as any)['api-key'];
+              results = await provider.fn(query, apiKey, signal);
             } else {
-              results = await provider.fn(query);
+              results = await provider.fn(query, signal);
             }
             onUpdate?.({ content: [{ type: "text", text: `  [${provider.name}] Found ${results.length} results` }] });
             allResults.push(...results);

@@ -55,7 +55,7 @@ export function extractDomain(url: string): string | undefined {
 
 // ─── DuckDuckGo ──────────────────────────────────────────────────────────────
 
-export async function searchDuckDuckGo(query: string): Promise<SearchResult[]> {
+export async function searchDuckDuckGo(query: string, signal?: AbortSignal): Promise<SearchResult[]> {
   return enqueue('duckduckgo', async () => {
     const endpoints = [
       'https://html.duckduckgo.com/html/?q=',
@@ -65,7 +65,12 @@ export async function searchDuckDuckGo(query: string): Promise<SearchResult[]> {
     await delay(2000 + Math.random() * 3000);
 
     const controller = new AbortController();
-    setTimeout(() => controller.abort(), 15000);
+    const timeoutId = setTimeout(() => controller.abort(), 15000);
+    // Respect external abort signal
+    signal?.addEventListener('abort', () => {
+      clearTimeout(timeoutId);
+      controller.abort();
+    }, { once: true });
 
     const opts = {
       signal: controller.signal,
@@ -185,7 +190,7 @@ class StackOverflowAPIError extends Error {
   }
 }
 
-export async function searchStackOverflowAPI(query: string, apiKey?: string): Promise<SearchResult[]> {
+export async function searchStackOverflowAPI(query: string, apiKey?: string, signal?: AbortSignal): Promise<SearchResult[]> {
   const params = new URLSearchParams({
     q: query,
     order: 'desc',
@@ -201,6 +206,7 @@ export async function searchStackOverflowAPI(query: string, apiKey?: string): Pr
   }
 
   const res = await fetch(url, {
+    signal,
     headers: { 'User-Agent': pickRandom(USER_AGENTS) },
   });
 
@@ -230,12 +236,12 @@ export async function searchStackOverflowAPI(query: string, apiKey?: string): Pr
   });
 }
 
-export async function searchStackOverflow(query: string): Promise<SearchResult[]> {
+export async function searchStackOverflow(query: string, apiKey?: string, signal?: AbortSignal): Promise<SearchResult[]> {
   await delay(1500 + Math.random() * 2000);
 
   // Try API first
   try {
-    return await searchStackOverflowAPI(query);
+    return await searchStackOverflowAPI(query, apiKey, signal);
   } catch (err) {
     if (err instanceof StackOverflowAPIError) {
       // Rate limited — set cooldown and fall back to scraper
@@ -244,14 +250,19 @@ export async function searchStackOverflow(query: string): Promise<SearchResult[]
     // Fall back to scraper
   }
 
-  return searchStackOverflowScraper(query);
+  return searchStackOverflowScraper(query, signal);
 }
 
-async function searchStackOverflowScraper(query: string): Promise<SearchResult[]> {
+async function searchStackOverflowScraper(query: string, signal?: AbortSignal): Promise<SearchResult[]> {
   await delay(1500 + Math.random() * 2000);
 
   const controller = new AbortController();
-  setTimeout(() => controller.abort(), 15000);
+  const timeoutId = setTimeout(() => controller.abort(), 15000);
+  // Respect external abort signal
+  signal?.addEventListener('abort', () => {
+    clearTimeout(timeoutId);
+    controller.abort();
+  }, { once: true });
 
   const url = `https://stackoverflow.com/search?q=${encodeURIComponent(query)}`;
   const res = await fetch(url, {
@@ -295,11 +306,12 @@ async function searchStackOverflowScraper(query: string): Promise<SearchResult[]
 
 // ─── npm ─────────────────────────────────────────────────────────────────────
 
-export async function searchNpm(query: string): Promise<SearchResult[]> {
+export async function searchNpm(query: string, signal?: AbortSignal): Promise<SearchResult[]> {
   await delay(1000 + Math.random() * 1500);
 
   try {
     const res = await fetch(`https://registry.npmjs.org/-/v1/search?text=${encodeURIComponent(query)}&size=10`, {
+      signal,
       headers: { 'User-Agent': pickRandom(USER_AGENTS) },
     });
 
@@ -322,11 +334,12 @@ export async function searchNpm(query: string): Promise<SearchResult[]> {
 
 // ─── GitHub ──────────────────────────────────────────────────────────────────
 
-export async function searchGitHub(query: string): Promise<SearchResult[]> {
+export async function searchGitHub(query: string, signal?: AbortSignal): Promise<SearchResult[]> {
   await delay(1500 + Math.random() * 2000);
 
   try {
     const res = await fetch(`https://api.github.com/search/repositories?q=${encodeURIComponent(query)}&per_page=10`, {
+      signal,
       headers: { 'User-Agent': pickRandom(USER_AGENTS) },
     });
 
@@ -346,13 +359,13 @@ export async function searchGitHub(query: string): Promise<SearchResult[]> {
 
 // ─── Wikipedia ───────────────────────────────────────────────────────────────
 
-export async function searchWikipedia(query: string): Promise<SearchResult[]> {
+export async function searchWikipedia(query: string, signal?: AbortSignal): Promise<SearchResult[]> {
   await delay(1000 + Math.random() * 1500);
 
   try {
     const searchRes = await fetch(
       `https://en.wikipedia.org/w/api.php?action=opensearch&search=${encodeURIComponent(query)}&limit=10&format=json`,
-      { headers: { 'User-Agent': pickRandom(USER_AGENTS) } }
+      { signal, headers: { 'User-Agent': pickRandom(USER_AGENTS) } }
     );
     if (!searchRes.ok) return [];
     const searchData = await searchRes.json();
@@ -363,7 +376,7 @@ export async function searchWikipedia(query: string): Promise<SearchResult[]> {
     // Use batch API to fetch all extracts in one request
     const batchRes = await fetch(
       `https://en.wikipedia.org/w/api.php?action=query&titles=${encodeURIComponent(titles.join('|'))}&prop=extracts&exintro=true&exsentences=0&explaintext=true&format=json`,
-      { headers: { 'User-Agent': pickRandom(USER_AGENTS) } }
+      { signal, headers: { 'User-Agent': pickRandom(USER_AGENTS) } }
     );
     if (!batchRes.ok) {
       // Fallback: use descriptions only
@@ -409,12 +422,17 @@ export async function searchWikipedia(query: string): Promise<SearchResult[]> {
 
 // ─── Jina Search ─────────────────────────────────────────────────────────────
 
-export async function searchJina(query: string): Promise<SearchResult[]> {
+export async function searchJina(query: string, signal?: AbortSignal): Promise<SearchResult[]> {
   await delay(1000 + Math.random() * 1500);
 
   try {
     const controller = new AbortController();
-    setTimeout(() => controller.abort(), 20000);
+    const timeoutId = setTimeout(() => controller.abort(), 20000);
+    // Respect external abort signal
+    signal?.addEventListener('abort', () => {
+      clearTimeout(timeoutId);
+      controller.abort();
+    }, { once: true });
 
     const res = await fetch('https://s.jina.ai/', {
       method: 'POST',
@@ -443,14 +461,19 @@ export async function searchJina(query: string): Promise<SearchResult[]> {
 
 // ─── SearXNG ─────────────────────────────────────────────────────────────────
 
-export async function searchSearXNG(url: string, query: string): Promise<SearchResult[]> {
+export async function searchSearXNG(url: string, query: string, signal?: AbortSignal): Promise<SearchResult[]> {
   if (!url) return [];
 
   await delay(1000 + Math.random() * 1500);
 
   try {
     const controller = new AbortController();
-    setTimeout(() => controller.abort(), 15000);
+    const timeoutId = setTimeout(() => controller.abort(), 15000);
+    // Respect external abort signal
+    signal?.addEventListener('abort', () => {
+      clearTimeout(timeoutId);
+      controller.abort();
+    }, { once: true });
 
     const res = await fetch(`${url}/search?q=${encodeURIComponent(query)}&format=json`, {
       signal: controller.signal,

@@ -1219,3 +1219,99 @@ describe('PROVIDER_MAP', () => {
     expect(PROVIDER_MAP['unknown']).toBeUndefined();
   });
 });
+
+// ─── Abort Signal Propagation ────────────────────────────────────────────────
+
+describe('AbortSignal propagation', () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it('npm passes signal to fetch', async () => {
+    let receivedSignal: AbortSignal | undefined;
+    vi.spyOn(global, 'fetch').mockImplementation(async (url: string, init?: any) => {
+      receivedSignal = init?.signal;
+      return new Response(NPM_RESPONSE, {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      });
+    });
+
+    const controller = new AbortController();
+    await searchNpm('test', controller.signal);
+    expect(receivedSignal).toBe(controller.signal);
+  });
+
+  it('GitHub passes signal to fetch', async () => {
+    let receivedSignal: AbortSignal | undefined;
+    vi.spyOn(global, 'fetch').mockImplementation(async (url: string, init?: any) => {
+      receivedSignal = init?.signal;
+      return new Response(GITHUB_RESPONSE, {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      });
+    });
+
+    const controller = new AbortController();
+    await searchGitHub('test', controller.signal);
+    expect(receivedSignal).toBe(controller.signal);
+  });
+
+  it('Wikipedia passes signal to fetch', async () => {
+    let receivedSignal: AbortSignal | undefined;
+    vi.spyOn(global, 'fetch').mockImplementation(async (url: string, init?: any) => {
+      receivedSignal = init?.signal;
+      return new Response(WIKIPEDIA_RESPONSE, {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      });
+    });
+
+    const controller = new AbortController();
+    await searchWikipedia('test', controller.signal);
+    expect(receivedSignal).toBe(controller.signal);
+  });
+
+  it('SearXNG accepts signal parameter without error', async () => {
+    vi.spyOn(global, 'fetch').mockImplementation(async () => {
+      return new Response(JSON.stringify({ results: [] }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      });
+    });
+
+    const controller = new AbortController();
+    // Should not throw — signal is connected to internal controller
+    const results = await searchSearXNG('https://searx.local', 'test', controller.signal);
+    expect(results).toEqual([]);
+  });
+
+  it('Jina accepts signal parameter without error', async () => {
+    vi.spyOn(global, 'fetch').mockImplementation(async () => {
+      return new Response(JINA_RESPONSE, {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      });
+    });
+
+    const controller = new AbortController();
+    // Should not throw — signal is connected to internal controller
+    const results = await searchJina('test', controller.signal);
+    expect(results.length).toBeGreaterThan(0);
+  });
+
+  it('StackOverflow API passes signal to fetch', async () => {
+    let receivedSignal: AbortSignal | undefined;
+    vi.spyOn(global, 'fetch').mockImplementation(async (url: string, init?: any) => {
+      receivedSignal = init?.signal;
+      return new Response(JSON.stringify({ items: [], quota_remaining: 100 }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      });
+    });
+
+    const controller = new AbortController();
+    await searchStackOverflowAPI('test', undefined, controller.signal);
+    expect(receivedSignal).toBe(controller.signal);
+  });
+});
