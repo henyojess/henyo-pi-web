@@ -1,5 +1,5 @@
 import { detectContext, buildProviderChain, CODING_SIGNALS } from '../shared/search/context';
-import { normalizeUrl, formatResults } from '../shared/format';
+import { normalizeUrl, formatResults, diversifyByDomain } from '../shared/format';
 import type { SearchResult } from '../shared/search/providers';
 
 // ─── detectContext ───────────────────────────────────────────────────────────
@@ -168,5 +168,51 @@ describe('formatResults', () => {
     const output = formatResults(results);
     expect(output).toContain('1. First');
     expect(output).toContain('2. Second');
+  });
+});
+
+// ─── Domain diversification tests ───────────────────────────────────────────
+
+describe('diversifyByDomain', () => {
+  it('caps results per domain by default (2)', () => {
+    const results: SearchResult[] = [
+      { title: 'A', url: 'https://a.com/1', snippet: '', domain: 'a.com' },
+      { title: 'B', url: 'https://a.com/2', snippet: '', domain: 'a.com' },
+      { title: 'C', url: 'https://a.com/3', snippet: '', domain: 'a.com' },
+      { title: 'D', url: 'https://b.com/1', snippet: '', domain: 'b.com' },
+    ];
+    const diversified = diversifyByDomain(results, 2);
+    expect(diversified.length).toBe(4);
+  });
+
+  it('preserves order within domain', () => {
+    const results: SearchResult[] = [
+      { title: 'First A', url: 'https://a.com/1', snippet: '', domain: 'a.com' },
+      { title: 'First B', url: 'https://b.com/1', snippet: '', domain: 'b.com' },
+      { title: 'Second A', url: 'https://a.com/2', snippet: '', domain: 'a.com' },
+    ];
+    const diversified = diversifyByDomain(results, 2);
+    // Results grouped by domain, preserving order within each group
+    expect(diversified[0].title).toBe('First A');
+    expect(diversified[1].title).toBe('Second A');
+    expect(diversified[2].title).toBe('First B');
+  });
+
+  it('handles results without domain', () => {
+    const results: SearchResult[] = [
+      { title: 'No domain', url: '—', snippet: '', domain: undefined },
+      { title: 'A', url: 'https://a.com', snippet: '', domain: 'a.com' },
+    ];
+    const diversified = diversifyByDomain(results, 2);
+    expect(diversified.length).toBe(2);
+  });
+
+  it('returns all results when under cap', () => {
+    const results: SearchResult[] = [
+      { title: 'A', url: 'https://a.com', snippet: '', domain: 'a.com' },
+      { title: 'B', url: 'https://b.com', snippet: '', domain: 'b.com' },
+    ];
+    const diversified = diversifyByDomain(results, 2);
+    expect(diversified.length).toBe(2);
   });
 });

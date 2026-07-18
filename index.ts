@@ -7,7 +7,7 @@ import { detectContext, buildProviderChain } from "./shared/search/context";
 import { PROVIDER_MAP } from "./shared/search/providers";
 import type { SearchResult } from "./shared/search/providers";
 import { fetchPage } from "./shared/fetch/pipeline";
-import { formatResults, normalizeUrl } from "./shared/format";
+import { formatResults, normalizeUrl, diversifyByDomain } from "./shared/format";
 
 export default function (pi: ExtensionAPI) {
   const config = loadConfig();
@@ -115,7 +115,8 @@ export default function (pi: ExtensionAPI) {
         if (allResults.length >= max) break;
       }
 
-      const results = allResults.slice(0, max);
+      const diversified = diversifyByDomain(allResults, 2);
+      const results = diversified.slice(0, max);
 
       if (!noCache) {
         cache.put(cacheKey, results);
