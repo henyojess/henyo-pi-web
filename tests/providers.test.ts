@@ -1002,6 +1002,40 @@ describe('PROVIDER_MAP', () => {
   });
 });
 
+// ─── withRetry / CAPTCHA detection tests ─────────────────────────────────────
+
+describe('DDG CAPTCHA detection', () => {
+  it('detects captcha keyword', async () => {
+    vi.spyOn(global, 'fetch').mockImplementation(async () => {
+      return new Response('<html><body>captcha detected</body></html>', {
+        status: 200,
+        headers: { 'Content-Type': 'text/html' },
+      });
+    });
+    const results = await searchDuckDuckGo('test');
+    expect(results).toEqual([]);
+  });
+
+  it('detects access denied keyword', async () => {
+    vi.spyOn(global, 'fetch').mockImplementation(async () => {
+      return new Response('<html><body>access denied</body></html>', {
+        status: 200,
+        headers: { 'Content-Type': 'text/html' },
+      });
+    });
+    const results = await searchDuckDuckGo('test');
+    expect(results).toEqual([]);
+  });
+
+  it('detects HTTP 429 rate limit', async () => {
+    vi.spyOn(global, 'fetch').mockImplementation(async () => {
+      return new Response('Rate limited', { status: 429 });
+    });
+    const results = await searchDuckDuckGo('test');
+    expect(results).toEqual([]);
+  });
+});
+
 // ─── Phase 6: context.ts supplementary tests (~5 tests) ───────────────────
 
 describe('detectContext edge cases', () => {

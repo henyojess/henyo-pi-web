@@ -1,48 +1,106 @@
 import { pickRandom, delay, USER_AGENTS, ACCEPT_LANGUAGES } from '../user-agents';
 import { enqueue, SearchResult } from './queue';
+import { RateLimitStore, DEFAULT_RATE_LIMIT_COOLDOWNS } from '../cache';
+
+// ─── CAPTCHA / rate-limit detection ──────────────────────────────────────────
+
+const CAPTCHA_KEYWORDS = [
+  'access denied', 'verify you are human', 'captcha', 'blocked', 'safety check',
+];
+
+function isCaptchaResponse(body: string): boolean {
+  const lower = body.toLowerCase();
+  return CAPTCHA_KEYWORDS.some(kw => lower.includes(kw));
+}
+
+// ─── Retry wrapper ───────────────────────────────────────────────────────────
+
+const rateLimitStore = new RateLimitStore();
+
+/**
+ * Retry a function with exponential backoff on network errors.
+ * Does NOT retry on rate limit/CAPTCHA — those are handled separately.
+ */
+async function withRetry<T>(
+  fn: () => Promise<T>,
+  providerName: string,
+  maxRetries = 2,
+): Promise<T> {
+  let lastError: unknown;
+  for (let attempt = 0; attempt <= maxRetries; attempt++) {
+    try {
+      return await fn();
+    } catch (err: any) {
+      lastError = err;
+      // Network errors: retry (fetch throws, timeout, no response)
+      if (attempt < maxRetries) {
+        const backoffMs = 2000 * Math.pow(2, attempt);
+        await delay(backoffMs);
+      }
+    }
+  }
+  throw lastError;
+}
 
 // ─── DuckDuckGo ──────────────────────────────────────────────────────────────
 
 export async function searchDuckDuckGo(query: string): Promise<SearchResult[]> {
   return enqueue('duckduckgo', async () => {
-  const endpoints = [
-    'https://html.duckduckgo.com/html/?q=',
-    'https://duckduckgo.com/html/?q=',
-  ];
+    const endpoints = [
+      'https://html.duckduckgo.com/html/?q=',
+      'https://duckduckgo.com/html/?q=',
+    ];
 
-  await delay(2000 + Math.random() * 3000);
+    await delay(2000 + Math.random() * 3000);
 
-  const controller = new AbortController();
-  setTimeout(() => controller.abort(), 15000);
+    const controller = new AbortController();
+    setTimeout(() => controller.abort(), 15000);
 
-  const opts = {
-    signal: controller.signal,
-    headers: {
-      'User-Agent': pickRandom(USER_AGENTS),
-      'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
-      'Accept-Language': pickRandom(ACCEPT_LANGUAGES),
-      'Referer': 'https://duckduckgo.com/',
-    },
-  };
+    const opts = {
+      signal: controller.signal,
+      headers: {
+        'User-Agent': pickRandom(USER_AGENTS),
+        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+        'Accept-Language': pickRandom(ACCEPT_LANGUAGES),
+        'Referer': 'https://duckduckgo.com/',
+      },
+    };
 
-  let html: string | null = null;
-  for (const base of endpoints) {
-    const url = `${base}${encodeURIComponent(query)}`;
+    // Use withRetry for network error retries (2s → 4s, max 2 retries)
+    let html: string | null = null;
     try {
-      const res = await fetch(url, opts);
-      if (!res.ok) continue;
-      html = await res.text();
-      if (html.toLowerCase().includes('captcha') || html.toLowerCase().includes('access denied')) {
-        html = null;
-        continue;
+      html = await withRetry(async () => {
+        for (const base of endpoints) {
+          const url = `${base}${encodeURIComponent(query)}`;
+          const res = await fetch(url, opts);
+          if (!res.ok) {
+            // HTTP 429 = rate limited → set cooldown, throw to skip retries
+            if (res.status === 429) {
+              rateLimitStore.setCooldown('duckduckgo', DEFAULT_RATE_LIMIT_COOLDOWNS.duckduckgo);
+              throw new Error('RATE_LIMITED');
+            }
+            continue;
+          }
+          const body = await res.text();
+          // CAPTCHA detected → set cooldown, throw to skip retries
+          if (isCaptchaResponse(body)) {
+            rateLimitStore.setCooldown('duckduckgo', DEFAULT_RATE_LIMIT_COOLDOWNS.duckduckgo);
+            throw new Error('CAPTCHA');
+          }
+          if (body) return body;
+        }
+        throw new Error('No endpoint succeeded');
+      }, 'duckduckgo');
+    } catch (err: any) {
+      // RATE_LIMITED or CAPTCHA → return empty, no retry
+      if (err.message === 'RATE_LIMITED' || err.message === 'CAPTCHA') {
+        return [];
       }
-      break;
-    } catch {
-      continue;
+      // Network error — withRetry already handled retries
+      return [];
     }
-  }
 
-  if (!html) return [];
+    if (!html) return [];
 
   const bodyMatch = html.match(/<body[^>]*>([\s\S]*)<\/body>/i);
   if (!bodyMatch) return [];
