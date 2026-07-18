@@ -69,16 +69,17 @@ export default function (pi: ExtensionAPI) {
       // Run providers sequentially by priority group
       const priorities = [...new Set(providers.map(p => p.priority))].sort((a, b) => a - b);
       const allResults: SearchResult[] = [];
+      const providerResults: Array<{ name: string; status: 'ok' | 'error' | 'timeout' | 'cooldown'; error?: string }> = [];
 
       for (const priority of priorities) {
         if (signal?.aborted) {
-          return { content: [{ type: "text", text: "Search cancelled" }] };
+          return { content: [{ type: "text", text: "Search cancelled" }], details: { count: 0, context: contextName, providers: providerResults.map(p => ({ name: p.name, status: p.status, error: p.error })), aborted: true } };
         }
 
         const group = providers.filter(p => p.priority === priority);
         for (const provider of group) {
           if (signal?.aborted) {
-            return { content: [{ type: "text", text: "Search cancelled" }] };
+            return { content: [{ type: "text", text: "Search cancelled" }], details: { count: 0, context: contextName, providers: providerResults.map(p => ({ name: p.name, status: p.status, error: p.error })), aborted: true } };
           }
 
           onUpdate?.({ content: [{ type: "text", text: `  [${provider.name}] Searching...` }] });
@@ -94,8 +95,10 @@ export default function (pi: ExtensionAPI) {
             }
             onUpdate?.({ content: [{ type: "text", text: `  [${provider.name}] Found ${results.length} results` }] });
             allResults.push(...results);
+            providerResults.push({ name: provider.name, status: 'ok' });
           } catch (err: any) {
             onUpdate?.({ content: [{ type: "text", text: `  [${provider.name}] Error: ${err.message || err}` }] });
+            providerResults.push({ name: provider.name, status: 'error', error: err.message || String(err) });
           }
         }
 
@@ -121,13 +124,13 @@ export default function (pi: ExtensionAPI) {
       if (results.length === 0) {
         return {
           content: [{ type: "text", text: "No results found." }],
-          details: { count: 0 },
+          details: { count: 0, context: contextName, providers: providerResults.map(p => ({ name: p.name, status: p.status, error: p.error })) },
         };
       }
 
       return {
         content: [{ type: "text", text: formatResults(results) }],
-        details: { count: results.length, context: contextName },
+        details: { count: results.length, context: contextName, providers: providerResults.map(p => ({ name: p.name, status: p.status, error: p.error })) },
       };
     },
   });
