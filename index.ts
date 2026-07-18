@@ -73,13 +73,23 @@ export default function (pi: ExtensionAPI) {
 
       for (const priority of priorities) {
         if (signal?.aborted) {
+          // Return partial results on abort
+          const partial = allResults.slice(0, max);
+          if (partial.length > 0) {
+            const diversified = diversifyByDomain(partial, 2);
+            return {
+              content: [{ type: "text", text: formatResults(diversified) }],
+              details: { count: diversified.length, context: contextName, providers: providerResults.map(p => ({ name: p.name, status: p.status, error: p.error })), aborted: true },
+            };
+          }
           return { content: [{ type: "text", text: "Search cancelled" }], details: { count: 0, context: contextName, providers: providerResults.map(p => ({ name: p.name, status: p.status, error: p.error })), aborted: true } };
         }
 
         const group = providers.filter(p => p.priority === priority);
         for (const provider of group) {
           if (signal?.aborted) {
-            return { content: [{ type: "text", text: "Search cancelled" }], details: { count: 0, context: contextName, providers: providerResults.map(p => ({ name: p.name, status: p.status, error: p.error })), aborted: true } };
+            providerResults.push({ name: provider.name, status: 'timeout' });
+            continue;
           }
 
           onUpdate?.({ content: [{ type: "text", text: `  [${provider.name}] Searching...` }] });
