@@ -1080,3 +1080,27 @@ describe('searchWikipedia — edge cases', () => {
     expect(results).toEqual([]);
   });
 });
+
+// ─── PROVIDER_MAP ────────────────────────────────────────────────────────────
+
+describe('PROVIDER_MAP', () => {
+  it('has all 7 expected provider keys', () => {
+    expect(PROVIDER_MAP).toHaveProperty('duckduckgo');
+    expect(PROVIDER_MAP).toHaveProperty('stackoverflow');
+    expect(PROVIDER_MAP).toHaveProperty('npm');
+    expect(PROVIDER_MAP).toHaveProperty('github');
+    expect(PROVIDER_MAP).toHaveProperty('wikipedia');
+    expect(PROVIDER_MAP).toHaveProperty('jina');
+    expect(PROVIDER_MAP).toHaveProperty('searxng');
+  });
+
+  it('all values are functions', () => {
+    for (const [key, fn] of Object.entries(PROVIDER_MAP)) {
+      expect(typeof fn).toBe('function');
+    }
+  });
+
+  it('unknown key returns undefined', () => {
+    expect(PROVIDER_MAP['unknown']).toBeUndefined();
+  });
+});

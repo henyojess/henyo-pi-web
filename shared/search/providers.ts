@@ -1,15 +1,10 @@
 import { pickRandom, delay, USER_AGENTS, ACCEPT_LANGUAGES } from '../user-agents';
-
-export interface SearchResult {
-  title: string;
-  url: string;
-  snippet: string;
-  source?: string;
-}
+import { enqueue, SearchResult } from './queue';
 
 // ─── DuckDuckGo ──────────────────────────────────────────────────────────────
 
 export async function searchDuckDuckGo(query: string): Promise<SearchResult[]> {
+  return enqueue('duckduckgo', async () => {
   const endpoints = [
     'https://html.duckduckgo.com/html/?q=',
     'https://duckduckgo.com/html/?q=',
@@ -107,6 +102,7 @@ export async function searchDuckDuckGo(query: string): Promise<SearchResult[]> {
   }
 
   return results;
+  });
 }
 
 // ─── StackOverflow ───────────────────────────────────────────────────────────
