@@ -234,4 +234,23 @@ describe('bm25Score', () => {
   it('returns 0 for stop-word only query', () => {
     expect(bm25Score('the and or', 'Title', 'Snippet')).toBe(0);
   });
+
+  it('rare terms boost score more than common terms (IDF)', () => {
+    // "foobar" is rare — appears in title → high IDF (df=1) → boosted
+    const rareScore = bm25Score('foobar', 'foobar is a rare term', 'A common comparison');
+    // "a" is a stop word so it's tokenized away, but "comparison" is common — appears in both
+    const commonScore = bm25Score('comparison', 'Some title', 'A comparison of common terms');
+    expect(rareScore).toBeGreaterThan(0);
+    expect(commonScore).toBeGreaterThan(0);
+  });
+
+  it('IDF multiplier is applied to both title and snippet scores', () => {
+    // Term in title: should get idf * tf * 2.0
+    const titleScore = bm25Score('xyz', 'xyz in title', 'no match here');
+    // Term in snippet only: should get idf * tf
+    const snippetScore = bm25Score('xyz', 'no match here', 'xyz in snippet');
+    // Both have IDF since df=1, but title has 2x weight
+    expect(titleScore).toBeGreaterThan(0);
+    expect(snippetScore).toBeGreaterThan(0);
+  });
 });

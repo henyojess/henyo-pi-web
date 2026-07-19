@@ -30,12 +30,25 @@ export function bm25Score(query: string, title: string, snippet: string): number
   const snippetTokens = tokenize(snippet);
   const allTokens = [...titleTokens, ...snippetTokens];
 
+  // ── IDF computation ──────────────────────────────────────────────────────
+  // Document frequency: how many query terms appear in this document.
+  // Since we only have one document, df ∈ {0, 1}. We use smoothed IDF.
+  const docFreq = new Map<string, number>();
+  const allUniqueTokens = new Set(allTokens);
+  for (const term of queryTerms) {
+    docFreq.set(term, allUniqueTokens.has(term) ? 1 : 0);
+  }
+
   let score = 0;
   const k1 = 1.5;  // BM25 parameter
   const b = 0.75;  // BM25 parameter
   const avgLen = allTokens.length || 1;
 
   for (const term of queryTerms) {
+    const df = docFreq.get(term) ?? 0;
+    // Smoothed IDF: log(1 + (N - df + 0.5) / (df + 0.5)), where N = 1 (single doc)
+    const idf = Math.log(1 + (1 - df + 0.5) / (df + 0.5));
+
     // TF in title (weighted 2x)
     let titleCount = 0;
     for (const t of titleTokens) {
@@ -43,7 +56,7 @@ export function bm25Score(query: string, title: string, snippet: string): number
     }
     if (titleCount > 0) {
       const tf = titleCount / (titleCount + k1 * (1 - b + b * (titleTokens.length / avgLen)));
-      score += tf * 2.0; // Title matches weighted higher
+      score += tf * idf * 2.0; // Title matches weighted higher
     }
 
     // TF in snippet
@@ -53,7 +66,7 @@ export function bm25Score(query: string, title: string, snippet: string): number
     }
     if (snippetCount > 0) {
       const tf = snippetCount / (snippetCount + k1 * (1 - b + b * (snippetTokens.length / avgLen)));
-      score += tf;
+      score += tf * idf;
     }
   }
 
