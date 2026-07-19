@@ -82,6 +82,46 @@ function deepMerge<T extends object>(target: T, source: Partial<T>): T {
 
 let _cachedSettings: Settings | null = null;
 
+// ─── Config Validation ───────────────────────────────────────────────────────
+
+/**
+ * Validate web-search config. Throws on missing required fields.
+ * - searxng provider requires a `url` in its config
+ */
+export function validateWebSearchConfig(config: WebSearchConfig): void {
+  const contexts = config.contexts || {};
+  for (const contextName of Object.keys(contexts)) {
+    const providers = contexts[contextName]!;
+    for (const providerName of Object.keys(providers)) {
+      if (providerName === 'searxng') {
+        const searxngConfig = providers.searxng!;
+        if (!searxngConfig.url || searxngConfig.url.trim() === '') {
+          throw new Error(
+            `SearXNG provider is configured in "${contextName}" context but "url" is missing or empty. ` +
+            `Add a SearXNG instance URL to your web-search config, or remove searxng from the provider list.`
+          );
+        }
+      }
+    }
+  }
+}
+
+/**
+ * Validate web-fetch config. Currently no required fields, but this
+ * provides a hook for future validation.
+ */
+export function validateWebFetchConfig(_config: WebFetchConfig): void {
+  // No required fields for web-fetch — extend as needed
+}
+
+/**
+ * Validate all loaded config. Throws on first error.
+ */
+export function validateConfig(config: Settings): void {
+  validateWebSearchConfig(config['web-search']);
+  validateWebFetchConfig(config['web-fetch']);
+}
+
 export function loadConfig(): Settings {
   if (_cachedSettings) return _cachedSettings;
 

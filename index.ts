@@ -1,7 +1,7 @@
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { Type } from "typebox";
 
-import { loadConfig } from "./shared/config";
+import { loadConfig, validateConfig } from "./shared/config";
 import { createCache } from "./shared/cache";
 import { detectContext, buildProviderChain } from "./shared/search/context";
 import { PROVIDER_MAP } from "./shared/search/providers";
@@ -11,6 +11,7 @@ import { formatResults, normalizeUrl, diversifyByDomain } from "./shared/format"
 
 export default function (pi: ExtensionAPI) {
   const config = loadConfig();
+  validateConfig(config);
 
   // --- web_search tool ---
   pi.registerTool({
