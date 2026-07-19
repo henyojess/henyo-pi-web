@@ -24,13 +24,18 @@ export async function extractWithDefuddle(html: string, url: string): Promise<Ex
   };
 }
 
-export async function fetchWithJina(url: string, timeoutMs: number): Promise<{ title: string; bodyText: string }> {
+export async function fetchWithJina(
+  url: string,
+  timeoutMs: number,
+  customHeaders?: Record<string, string>,
+): Promise<{ title: string; bodyText: string }> {
   const controller = new AbortController();
   setTimeout(() => controller.abort(), timeoutMs);
 
   const res = await fetch(`https://r.jina.ai/${url}`, {
     signal: controller.signal,
     headers: {
+      ...customHeaders,
       'User-Agent': pickRandom(USER_AGENTS),
       'Accept': 'text/plain',
       'X-Return-Format': 'text',

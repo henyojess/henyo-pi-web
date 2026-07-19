@@ -3,7 +3,11 @@ import { pickRandom, delay, USER_AGENTS, ACCEPT_LANGUAGES } from '../user-agents
 const RETRY_CODES = new Set([429, 500, 502, 503, 504]);
 const MAX_RETRIES = 3;
 
-export async function fetchWithRetry(url: string, timeoutMs: number): Promise<{ res: Response; url: string }> {
+export async function fetchWithRetry(
+  url: string,
+  timeoutMs: number,
+  customHeaders?: Record<string, string>,
+): Promise<{ res: Response; url: string }> {
   let targetUrl = url;
   if (!/^https?:\/\//i.test(targetUrl)) targetUrl = 'https://' + targetUrl;
 
@@ -15,6 +19,7 @@ export async function fetchWithRetry(url: string, timeoutMs: number): Promise<{ 
       const res = await fetch(targetUrl, {
         signal: controller.signal,
         headers: {
+          ...customHeaders,
           'User-Agent': pickRandom(USER_AGENTS),
           'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8',
           'Accept-Language': pickRandom(ACCEPT_LANGUAGES),

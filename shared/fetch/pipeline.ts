@@ -25,6 +25,7 @@ export interface FetchPageOptions {
   config: WebFetchConfig;
   signal?: AbortSignal;
   onUpdate?: (update: { content: Array<{ type: string; text: string }> }) => void;
+  headers?: Record<string, string>;
 }
 
 export interface FetchResult {
@@ -40,7 +41,7 @@ export interface FetchResult {
 }
 
 export async function fetchPage(options: FetchPageOptions): Promise<FetchResult> {
-  const { url, timeout, noCache, config, signal, onUpdate } = options;
+  const { url, timeout, noCache, config, signal, onUpdate, headers } = options;
 
   // Validate URL format — must have http:// or https:// scheme
   let parsedUrl: URL;
@@ -89,7 +90,7 @@ export async function fetchPage(options: FetchPageOptions): Promise<FetchResult>
   await delay(minDelay + Math.random() * (maxDelay - minDelay));
 
   // Fetch with retry
-  const { res, url: resolvedUrl } = await fetchWithRetry(url, timeout);
+  const { res, url: resolvedUrl } = await fetchWithRetry(url, timeout, headers);
   const text = await res.text();
 
   // Cloudflare warning
@@ -193,6 +194,7 @@ export async function fetchPage(options: FetchPageOptions): Promise<FetchResult>
   const extractionResult: ExtractionResult = await extractHtmlContent(text, resolvedUrl, {
     jinaEnabled,
     jinaTimeout,
+    headers,
     onUpdate,
   });
 

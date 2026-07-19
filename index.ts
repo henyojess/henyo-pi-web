@@ -177,9 +177,12 @@ export default function (pi: ExtensionAPI) {
         default: false,
         description: "Skip cache",
       })),
+      headers: Type.Optional(Type.Record(Type.String(), Type.String(), {
+        description: "Custom HTTP headers (e.g., { 'Authorization': 'Bearer token' })",
+      })),
     }),
     async execute(_toolCallId, params, signal, onUpdate, _ctx) {
-      const { url, timeout = 15000, noCache = false } = params;
+      const { url, timeout = 15000, noCache = false, headers } = params;
 
       onUpdate?.({ content: [{ type: "text", text: `Fetching ${url}...` }] });
 
@@ -191,6 +194,7 @@ export default function (pi: ExtensionAPI) {
           config: config["web-fetch"],
           signal,
           onUpdate,
+          headers,
         });
 
         // Handle oversized content — return metadata only, let agent decide
