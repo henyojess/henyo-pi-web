@@ -42,6 +42,7 @@ Extract clean readable content from any URL. Uses Defuddle locally with Jina Rea
 - `url` (string) — URL to fetch
 - `timeout` (integer, default 15000) — Timeout in ms (1000–60000)
 - `noCache` (boolean, default false) — Skip cache
+- `headers` (object, optional) — Custom HTTP headers, e.g. `{ "Authorization": "Bearer token" }`
 
 ## Configuration
 
@@ -54,7 +55,10 @@ Optional settings go in `~/.pi/settings.json`:
     "min-delay": 1000,
     "max-delay": 3000,
     "cache-max-files": 100,
-    "heading-threshold": 40000
+    "heading-threshold": 40000,
+    "content-threshold": 32000,
+    "jina-timeout": 30000,
+    "max-response-size": 10485760
   },
   "web-search": {
     "default-context": "general",
