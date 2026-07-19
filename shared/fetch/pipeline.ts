@@ -7,6 +7,7 @@ import { isCloudflareChallenge } from './detection';
 import { smartTruncate } from './truncate';
 import { fetchWithRetry } from './retry';
 import { normalizeUrl } from '../format';
+import { isSafeUrl } from './security';
 import type { ExtractionResult } from './html-extraction';
 
 function getCacheDir(subdir: string): string {
@@ -40,6 +41,26 @@ export interface FetchResult {
 
 export async function fetchPage(options: FetchPageOptions): Promise<FetchResult> {
   const { url, timeout, noCache, config, signal, onUpdate } = options;
+
+  // Validate URL format — must have http:// or https:// scheme
+  let parsedUrl: URL;
+  try {
+    parsedUrl = new URL(url);
+    if (!['http:', 'https:'].includes(parsedUrl.protocol)) {
+      throw new Error(`SSRF protection blocked request to ${url}: unsupported protocol '${parsedUrl.protocol}'`);
+    }
+  } catch (e) {
+    if (e instanceof Error && e.message.startsWith('SSRF protection')) {
+      throw e;
+    }
+    throw new Error(`SSRF protection blocked request to ${url}: invalid URL format`);
+  }
+
+  // SSRF protection — block private/reserved IPs and dangerous schemes
+  if (!isSafeUrl(url)) {
+    throw new Error(`SSRF protection blocked request to ${url}`);
+  }
+
   const jinaEnabled = config.jinaEnabled !== false;
   const minDelay = config['min-delay'] ?? 1000;
   const maxDelay = config['max-delay'] ?? 3000;
