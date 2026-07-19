@@ -65,7 +65,7 @@ export async function fetchPage(options: FetchPageOptions): Promise<FetchResult>
   const minDelay = config['min-delay'] ?? 1000;
   const maxDelay = config['max-delay'] ?? 3000;
   const headingThreshold = config['heading-threshold'] ?? 40000;
-  const contentThreshold = config['content-threshold'] ?? 100000;
+  const contentThreshold = config['content-threshold'] ?? 32000;
   const cacheMaxFiles = config['cache-max-files'] ?? 100;
 
   const cache = createCache(
