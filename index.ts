@@ -9,6 +9,14 @@ import type { SearchResult } from "./shared/search/providers";
 import { fetchPage } from "./shared/fetch/pipeline";
 import { formatResults, normalizeUrl, diversifyByDomain } from "./shared/format";
 
+function getCacheDir(subdir: string): string {
+  const home = process.env.HOME || process.env.USERPROFILE;
+  if (!process.env.HOME && process.env.USERPROFILE) {
+    console.warn('[web-search] HOME is undefined, using USERPROFILE for cache path');
+  }
+  return `${home}/.pi/tools-cache/${subdir}`;
+}
+
 export default function (pi: ExtensionAPI) {
   const config = loadConfig();
   validateConfig(config);
@@ -52,7 +60,7 @@ export default function (pi: ExtensionAPI) {
       }
 
       const cache = createCache<SearchResult[]>(
-        `${process.env.HOME}/.pi/tools-cache/web_search`,
+        getCacheDir('web_search'),
         1800,
       );
 

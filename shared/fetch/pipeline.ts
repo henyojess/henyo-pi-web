@@ -9,6 +9,14 @@ import { fetchWithRetry } from './retry';
 import { normalizeUrl } from '../format';
 import type { ExtractionResult } from './html-extraction';
 
+function getCacheDir(subdir: string): string {
+  const home = process.env.HOME || process.env.USERPROFILE;
+  if (!process.env.HOME && process.env.USERPROFILE) {
+    console.warn('[web-fetch] HOME is undefined, using USERPROFILE for cache path');
+  }
+  return `${home}/.pi/tools-cache/${subdir}`;
+}
+
 export interface FetchPageOptions {
   url: string;
   timeout: number;
@@ -40,7 +48,7 @@ export async function fetchPage(options: FetchPageOptions): Promise<FetchResult>
   const cacheMaxFiles = config['cache-max-files'] ?? 100;
 
   const cache = createCache(
-    `${process.env.HOME}/.pi/tools-cache/web_fetch`,
+    getCacheDir('web_fetch'),
     3600,
     cacheMaxFiles,
   );
@@ -108,7 +116,7 @@ export async function fetchPage(options: FetchPageOptions): Promise<FetchResult>
   const contentLength = truncatedResult.bodyText.length;
   if (contentLength > contentThreshold) {
     const cacheFilePath = keyToPath(
-      `${process.env.HOME}/.pi/tools-cache/web_fetch`,
+      getCacheDir('web_fetch'),
       cacheKey,
     );
     const fetchResult: FetchResult = {
