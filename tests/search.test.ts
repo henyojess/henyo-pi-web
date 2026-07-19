@@ -46,9 +46,41 @@ describe('detectContext', () => {
   });
 
   it('exact pattern matches work', () => {
-    expect(detectContext('SyntaxError: unexpected token')).toBe('coding');
+    // Single error name → 1 signal → general (needs 2+ signals for coding)
+    expect(detectContext('SyntaxError: unexpected token')).toBe('general');
     expect(detectContext('Traceback (most recent call last)')).toBe('general'); // only 1 signal
-    expect(detectContext('Traceback (most recent call last) Error: failed')).toBe('coding');
+    // Compound: traceback + undefined → 2 signals
+    expect(detectContext('Traceback (most recent call last) undefined')).toBe('coding');
+  });
+
+  it('rejects single-token false positives', () => {
+    // "throw" alone should not match (requires "throw new")
+    expect(detectContext('throw an error')).toBe('general');
+    // "assert" alone should not match (requires "assert.method()")
+    expect(detectContext('assert something')).toBe('general');
+    // Single error name → 1 signal → general
+    expect(detectContext('I got a TypeError yesterday')).toBe('general');
+    // "SyntaxError" without context
+    expect(detectContext('SyntaxError is a common word')).toBe('general');
+    // "Traceback" without context
+    expect(detectContext('There was a traceback in the log')).toBe('general');
+  });
+
+  it('compound patterns still match correctly', () => {
+    // throw new + const → 2 signals
+    expect(detectContext('throw new Error const x')).toBe('coding');
+    // TypeError + undefined → 2 signals
+    expect(detectContext('TypeError: undefined is not a function')).toBe('coding');
+    expect(detectContext('SyntaxError: missing ;')).toBe('general');
+    // Compound: traceback + undefined → 2 signals
+    expect(detectContext('Traceback (most recent call last) undefined')).toBe('coding');
+  });
+
+  it('rejects overly broad patterns', () => {
+    // "[something]()" alone should not match (requires content inside brackets)
+    expect(detectContext('I have [something]() in my list')).toBe('general');
+    // "{key: value}" alone should not match
+    expect(detectContext('the object {key: value} is here')).toBe('general');
   });
 });
 

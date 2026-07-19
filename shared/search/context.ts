@@ -12,10 +12,9 @@ export interface Provider {
 
 export const CODING_SIGNALS: RegExp[] = [
   // Error patterns
-  /error[:\s]/i,
-  /typeerror/i,
-  /syntaxerror/i,
-  /traceback/i,
+  /typeerror[:\s(]/i,
+  /syntaxerror[:\s(]/i,
+  /traceback\s*\(/i,
   /cannot find module/i,
   // Language constructs
   /import\s+[*\w{]/i,
@@ -48,7 +47,7 @@ export const CODING_SIGNALS: RegExp[] = [
   /it\s*\(/i,
   /test\s*\(/i,
   /expect\s*\(/i,
-  /assert/i,
+  /assert\.\w+\s*\(/i,
   // Shell
   /chmod\s|chown\s|sudo\s/i,
   /apt\s+install|yum\s+install|dnf\s+install/i,
@@ -62,8 +61,8 @@ export const CODING_SIGNALS: RegExp[] = [
   /\b(?:true|false|null|undefined)\b/i,
   /console\.log\s*\(/i,
   /print\s*\(/i,
-  /\[.*\]\(\)/i,  // array construction
-  /\{.*\}/i,  // object literal
+  /\[\s*\w+\s*\]\s*\(/i,  // array construction (compound)
+  /\{\s*\w+\s*:\s*\w+\s*\}/i,  // object literal (compound)
   /\w+\.map\s*\(/i,
   /\w+\.filter\s*\(/i,
   /\w+\.reduce\s*\(/i,
@@ -71,7 +70,7 @@ export const CODING_SIGNALS: RegExp[] = [
   /\w+\.catch\s*\(/i,
   /try\s*\{/i,
   /catch\s*\(/i,
-  /throw\s/i,
+  /throw\s+new\s/i,
   // SQL
   /select\s+.*\s+from\s+/i,
   /insert\s+into\s+/i,
