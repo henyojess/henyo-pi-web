@@ -1,10 +1,10 @@
 import { pickRandom, delay, USER_AGENTS } from '../../user-agents';
 import { enqueue } from '../queue';
-import { SearchResult } from './base';
+import { SearchResult, ProviderConfig } from './base';
 
 // ─── GitHub Provider ─────────────────────────────────────────────────────────
 
-export async function searchGitHub(query: string, signal?: AbortSignal): Promise<SearchResult[]> {
+export async function searchGitHub(query: string, _config?: ProviderConfig, signal?: AbortSignal): Promise<SearchResult[]> {
   return enqueue('github', async () => {
     await delay(1500 + Math.random() * 2000);
 

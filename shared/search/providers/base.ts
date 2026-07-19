@@ -9,8 +9,13 @@ export interface SearchResult {
 
 // ─── Provider Function Types ─────────────────────────────────────────────────
 
+/** Provider-specific config — shape depends on the provider */
+export interface ProviderConfig {
+  [key: string]: unknown;
+}
+
 /** Provider search function — each provider defines its own signature */
-export type ProviderFn = (...args: any[]) => Promise<SearchResult[]>;
+export type ProviderFn = (query: string, config?: ProviderConfig, signal?: AbortSignal) => Promise<SearchResult[]>;
 
 /** A provider with a name and a search function */
 export interface ProviderDefinition {

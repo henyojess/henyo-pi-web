@@ -1,7 +1,7 @@
 import { pickRandom, delay, USER_AGENTS, ACCEPT_LANGUAGES } from '../../user-agents';
 import { enqueue } from '../queue';
 import { RateLimitStore, DEFAULT_RATE_LIMIT_COOLDOWNS } from '../../cache';
-import { SearchResult } from './base';
+import { SearchResult, ProviderConfig } from './base';
 
 // ─── CAPTCHA / rate-limit detection ──────────────────────────────────────────
 
@@ -51,7 +51,7 @@ async function withRetry<T>(
 
 // ─── DuckDuckGo Provider ─────────────────────────────────────────────────────
 
-export async function searchDuckDuckGo(query: string, signal?: AbortSignal): Promise<SearchResult[]> {
+export async function searchDuckDuckGo(query: string, _config?: ProviderConfig, signal?: AbortSignal): Promise<SearchResult[]> {
   return enqueue('duckduckgo', async () => {
     const endpoints = [
       'https://html.duckduckgo.com/html/?q=',

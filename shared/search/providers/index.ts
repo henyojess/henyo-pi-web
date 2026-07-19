@@ -1,4 +1,4 @@
-import { SearchResult, SearchProvider, ProviderDefinition, ProviderFn } from './base';
+import { SearchResult, SearchProvider, ProviderDefinition, ProviderFn, ProviderConfig } from './base';
 import { searchDuckDuckGo, extractDomain } from './duckduckgo';
 import { searchStackOverflow, StackOverflowAPIError, searchStackOverflowAPI } from './stackoverflow';
 import { searchNpm } from './npm';
@@ -13,6 +13,7 @@ export {
   SearchProvider,
   ProviderDefinition,
   ProviderFn,
+  ProviderConfig,
   searchDuckDuckGo,
   searchStackOverflow,
   searchStackOverflowAPI,

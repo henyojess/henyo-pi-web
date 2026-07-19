@@ -1,10 +1,10 @@
 import { pickRandom, delay, USER_AGENTS } from '../../user-agents';
 import { enqueue } from '../queue';
-import { SearchResult } from './base';
+import { SearchResult, ProviderConfig } from './base';
 
 // ─── npm Provider ────────────────────────────────────────────────────────────
 
-export async function searchNpm(query: string, signal?: AbortSignal): Promise<SearchResult[]> {
+export async function searchNpm(query: string, _config?: ProviderConfig, signal?: AbortSignal): Promise<SearchResult[]> {
   return enqueue('npm', async () => {
     await delay(1000 + Math.random() * 1500);
 

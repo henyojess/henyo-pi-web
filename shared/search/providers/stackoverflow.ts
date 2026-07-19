@@ -1,7 +1,7 @@
 import { pickRandom, delay, USER_AGENTS } from '../../user-agents';
 import { enqueue } from '../queue';
 import { RateLimitStore, DEFAULT_RATE_LIMIT_COOLDOWNS } from '../../cache';
-import { SearchResult } from './base';
+import { SearchResult, ProviderConfig } from './base';
 
 // ─── StackOverflow API Error ─────────────────────────────────────────────────
 
@@ -14,7 +14,8 @@ export class StackOverflowAPIError extends Error {
 
 // ─── StackOverflow API Search ────────────────────────────────────────────────
 
-export async function searchStackOverflowAPI(query: string, apiKey?: string, signal?: AbortSignal): Promise<SearchResult[]> {
+export async function searchStackOverflowAPI(query: string, config?: ProviderConfig, signal?: AbortSignal): Promise<SearchResult[]> {
+  const apiKey = config?.apiKey as string | undefined;
   const params = new URLSearchParams({
     q: query,
     order: 'desc',
@@ -114,12 +115,13 @@ async function searchStackOverflowScraper(query: string, signal?: AbortSignal): 
 
 // ─── StackOverflow Provider ──────────────────────────────────────────────────
 
-export async function searchStackOverflow(query: string, apiKey?: string, signal?: AbortSignal): Promise<SearchResult[]> {
+export async function searchStackOverflow(query: string, config?: ProviderConfig, signal?: AbortSignal): Promise<SearchResult[]> {
+  const apiKey = config?.apiKey as string | undefined;
   return enqueue('stackoverflow', async () => {
     await delay(1500 + Math.random() * 2000);
 
     try {
-      return await searchStackOverflowAPI(query, apiKey, signal);
+      return await searchStackOverflowAPI(query, config, signal);
     } catch (err) {
       if (err instanceof StackOverflowAPIError) {
         rateLimitStore.setCooldown('stackoverflow', DEFAULT_RATE_LIMIT_COOLDOWNS.stackoverflow);

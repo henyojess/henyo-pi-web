@@ -1,10 +1,10 @@
 import { pickRandom, delay, USER_AGENTS } from '../../user-agents';
 import { enqueue } from '../queue';
-import { SearchResult } from './base';
+import { SearchResult, ProviderConfig } from './base';
 
 // ─── Jina Search Provider ────────────────────────────────────────────────────
 
-export async function searchJina(query: string, signal?: AbortSignal): Promise<SearchResult[]> {
+export async function searchJina(query: string, _config?: ProviderConfig, signal?: AbortSignal): Promise<SearchResult[]> {
   return enqueue('jina', async () => {
     await delay(1000 + Math.random() * 1500);
 

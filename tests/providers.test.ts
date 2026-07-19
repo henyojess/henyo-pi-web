@@ -878,7 +878,7 @@ describe('searchSearXNG', () => {
         headers: { 'Content-Type': 'application/json' },
       });
     });
-    const results = await searchSearXNG('https://searx.local', 'test');
+    const results = await searchSearXNG('test', { url: 'https://searx.local' });
     expect(results.length).toBe(1);
     expect(results[0].title).toBe('SearXNG Result');
     expect(results[0].url).toBe('https://example.com');
@@ -887,7 +887,7 @@ describe('searchSearXNG', () => {
   });
 
   it('returns empty array for empty URL', async () => {
-    const results = await searchSearXNG('', 'test');
+    const results = await searchSearXNG('test', { url: '' });
     expect(results).toEqual([]);
   });
 
@@ -906,7 +906,7 @@ describe('searchSearXNG', () => {
         headers: { 'Content-Type': 'application/json' },
       });
     });
-    const results = await searchSearXNG('https://searx.local', 'test');
+    const results = await searchSearXNG('test', { url: 'https://searx.local' });
     expect(results[0].title).toBe('Untitled');
     expect(results[0].url).toBe('https://example.com');
   });
@@ -915,7 +915,7 @@ describe('searchSearXNG', () => {
     vi.spyOn(global, 'fetch').mockImplementation(async () => {
       throw new Error('Network error');
     });
-    const results = await searchSearXNG('https://searx.local', 'test');
+    const results = await searchSearXNG('test', { url: 'https://searx.local' });
     expect(results).toEqual([]);
   });
 
@@ -923,7 +923,7 @@ describe('searchSearXNG', () => {
     vi.spyOn(global, 'fetch').mockImplementation(async () => {
       return new Response('Internal Server Error', { status: 500 });
     });
-    const results = await searchSearXNG('https://searx.local', 'test');
+    const results = await searchSearXNG('test', { url: 'https://searx.local' });
     expect(results).toEqual([]);
   });
 
@@ -937,7 +937,7 @@ describe('searchSearXNG', () => {
         headers: { 'Content-Type': 'application/json' },
       });
     });
-    const results = await searchSearXNG('https://searx.local', 'test');
+    const results = await searchSearXNG('test', { url: 'https://searx.local' });
     expect(results).toEqual([]);
   });
 
@@ -957,7 +957,7 @@ describe('searchSearXNG', () => {
         headers: { 'Content-Type': 'application/json' },
       });
     });
-    const results = await searchSearXNG('https://searx.local', 'test');
+    const results = await searchSearXNG('test', { url: 'https://searx.local' });
     expect(results[0].snippet).toBe('');
   });
 
@@ -976,7 +976,7 @@ describe('searchSearXNG', () => {
         headers: { 'Content-Type': 'application/json' },
       });
     });
-    const results = await searchSearXNG('https://searx.local', 'test');
+    const results = await searchSearXNG('test', { url: 'https://searx.local' });
     expect(results[0].url).toBe('');
   });
 });
@@ -1147,7 +1147,7 @@ describe('detectContext edge cases', () => {
 
 describe('searchSearXNG — edge cases', () => {
   it('returns empty array when !url', async () => {
-    const results = await searchSearXNG('query', '');
+    const results = await searchSearXNG('query', { url: '' });
     expect(results).toEqual([]);
   });
 
@@ -1155,7 +1155,7 @@ describe('searchSearXNG — edge cases', () => {
     vi.spyOn(global, 'fetch').mockImplementation(async () => {
       return new Response('Not found', { status: 404 });
     });
-    const results = await searchSearXNG('query', 'https://searx.be/search');
+    const results = await searchSearXNG('query', { url: 'https://searx.be/search' });
     expect(results).toEqual([]);
   });
 
@@ -1163,7 +1163,7 @@ describe('searchSearXNG — edge cases', () => {
     vi.spyOn(global, 'fetch').mockImplementation(async () => {
       return new Response('not json', { status: 200 });
     });
-    const results = await searchSearXNG('query', 'https://searx.be/search');
+    const results = await searchSearXNG('query', { url: 'https://searx.be/search' });
     expect(results).toEqual([]);
   });
 
@@ -1171,7 +1171,7 @@ describe('searchSearXNG — edge cases', () => {
     vi.spyOn(global, 'fetch').mockImplementation(async () => {
       throw new Error('Network error');
     });
-    const results = await searchSearXNG('query', 'https://searx.be/search');
+    const results = await searchSearXNG('query', { url: 'https://searx.be/search' });
     expect(results).toEqual([]);
   });
 });
@@ -1238,7 +1238,7 @@ describe('AbortSignal propagation', () => {
     });
 
     const controller = new AbortController();
-    await searchNpm('test', controller.signal);
+    await searchNpm('test', undefined, controller.signal);
     expect(receivedSignal).toBe(controller.signal);
   });
 
@@ -1253,7 +1253,7 @@ describe('AbortSignal propagation', () => {
     });
 
     const controller = new AbortController();
-    await searchGitHub('test', controller.signal);
+    await searchGitHub('test', undefined, controller.signal);
     expect(receivedSignal).toBe(controller.signal);
   });
 
@@ -1268,7 +1268,7 @@ describe('AbortSignal propagation', () => {
     });
 
     const controller = new AbortController();
-    await searchWikipedia('test', controller.signal);
+    await searchWikipedia('test', undefined, controller.signal);
     expect(receivedSignal).toBe(controller.signal);
   });
 
@@ -1282,7 +1282,7 @@ describe('AbortSignal propagation', () => {
 
     const controller = new AbortController();
     // Should not throw — signal is connected to internal controller
-    const results = await searchSearXNG('https://searx.local', 'test', controller.signal);
+    const results = await searchSearXNG('test', { url: 'https://searx.local' }, controller.signal);
     expect(results).toEqual([]);
   });
 
@@ -1296,7 +1296,7 @@ describe('AbortSignal propagation', () => {
 
     const controller = new AbortController();
     // Should not throw — signal is connected to internal controller
-    const results = await searchJina('test', controller.signal);
+    const results = await searchJina('test', undefined, controller.signal);
     expect(results.length).toBeGreaterThan(0);
   });
 

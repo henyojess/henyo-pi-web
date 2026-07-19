@@ -1,10 +1,10 @@
 import { pickRandom, delay, USER_AGENTS } from '../../user-agents';
 import { enqueue } from '../queue';
-import { SearchResult } from './base';
+import { SearchResult, ProviderConfig } from './base';
 
 // ─── Wikipedia Provider ──────────────────────────────────────────────────────
 
-export async function searchWikipedia(query: string, signal?: AbortSignal): Promise<SearchResult[]> {
+export async function searchWikipedia(query: string, _config?: ProviderConfig, signal?: AbortSignal): Promise<SearchResult[]> {
   return enqueue('wikipedia', async () => {
     await delay(1000 + Math.random() * 1500);
 

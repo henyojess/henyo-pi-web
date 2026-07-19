@@ -1,10 +1,11 @@
 import { pickRandom, delay, USER_AGENTS } from '../../user-agents';
 import { enqueue } from '../queue';
-import { SearchResult } from './base';
+import { SearchResult, ProviderConfig } from './base';
 
 // ─── SearXNG Provider ────────────────────────────────────────────────────────
 
-export async function searchSearXNG(url: string, query: string, signal?: AbortSignal): Promise<SearchResult[]> {
+export async function searchSearXNG(query: string, config?: ProviderConfig, signal?: AbortSignal): Promise<SearchResult[]> {
+  const url = config?.url as string | undefined;
   if (!url) return [];
 
   return enqueue('searxng', async () => {
