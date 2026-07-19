@@ -100,16 +100,21 @@ export async function fetchPage(options: FetchPageOptions): Promise<FetchResult>
   const contentType = res.headers.get('Content-Type') || '';
 
   if (contentType.includes('application/json')) {
-    const jsonStr = JSON.stringify(JSON.parse(text), null, 2);
-    const result: FetchResult = {
-      text: jsonStr,
-      resolvedUrl,
-      title: '',
-      source: 'json',
-      truncated: false,
-    };
-    if (!noCache) cache.put(cacheKey, result);
-    return result;
+    try {
+      const jsonStr = JSON.stringify(JSON.parse(text), null, 2);
+      const result: FetchResult = {
+        text: jsonStr,
+        resolvedUrl,
+        title: '',
+        source: 'json',
+        truncated: false,
+      };
+      if (!noCache) cache.put(cacheKey, result);
+      return result;
+    } catch (e) {
+      console.warn(`[web-fetch] JSON parse error for ${url}: ${e instanceof Error ? e.message : String(e)}`);
+      // Fall through to treat as raw text
+    }
   }
 
   if (contentType.includes('text/plain')) {
