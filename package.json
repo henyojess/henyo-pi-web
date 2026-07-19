@@ -32,7 +32,8 @@
     "vitest": "^3.0.0"
   },
   "scripts": {
-    "test": "vitest run"
+    "test": "vitest run",
+    "coverage": "vitest run --coverage"
   },
   "pi": {
     "extensions": [
