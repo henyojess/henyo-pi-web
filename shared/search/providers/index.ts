@@ -1,5 +1,5 @@
-import { SearchResult, SearchProvider, ProviderDefinition, ProviderFn, ProviderConfig } from './base';
-import { searchDuckDuckGo, extractDomain } from './duckduckgo';
+import { SearchResult, SearchProvider, ProviderDefinition, ProviderFn, ProviderConfig, extractDomain } from './base';
+import { searchDuckDuckGo } from './duckduckgo';
 import { searchStackOverflow, StackOverflowAPIError, searchStackOverflowAPI } from './stackoverflow';
 import { searchNpm } from './npm';
 import { searchGitHub } from './github';

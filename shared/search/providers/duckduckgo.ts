@@ -1,55 +1,11 @@
 import { pickRandom, delay, USER_AGENTS, ACCEPT_LANGUAGES } from '../../user-agents';
 import { enqueue } from '../queue';
 import { RateLimitStore, DEFAULT_RATE_LIMIT_COOLDOWNS } from '../../rate-limit';
-import { SearchResult, ProviderConfig } from './base';
-
-// ─── CAPTCHA / rate-limit detection ──────────────────────────────────────────
-
-const CAPTCHA_KEYWORDS = [
-  'access denied', 'verify you are human', 'captcha', 'blocked', 'safety check',
-];
-
-function isCaptchaResponse(body: string): boolean {
-  const lower = body.toLowerCase();
-  return CAPTCHA_KEYWORDS.some(kw => lower.includes(kw));
-}
-
-// ─── Domain extraction ───────────────────────────────────────────────────────
-
-export function extractDomain(url: string): string | undefined {
-  try {
-    const parsed = new URL(url);
-    return parsed.hostname;
-  } catch {
-    return undefined;
-  }
-}
-
-// ─── Retry wrapper ───────────────────────────────────────────────────────────
-
-const rateLimitStore = new RateLimitStore();
-
-async function withRetry<T>(
-  fn: () => Promise<T>,
-  providerName: string,
-  maxRetries = 2,
-): Promise<T> {
-  let lastError: unknown;
-  for (let attempt = 0; attempt <= maxRetries; attempt++) {
-    try {
-      return await fn();
-    } catch (err: any) {
-      lastError = err;
-      if (attempt < maxRetries) {
-        const backoffMs = 2000 * Math.pow(2, attempt);
-        await delay(backoffMs);
-      }
-    }
-  }
-  throw lastError;
-}
+import { SearchResult, ProviderConfig, isCaptchaResponse, withRetry, extractDomain } from './base';
 
 // ─── DuckDuckGo Provider ─────────────────────────────────────────────────────
+
+const rateLimitStore = new RateLimitStore();
 
 export async function searchDuckDuckGo(query: string, _config?: ProviderConfig, signal?: AbortSignal): Promise<SearchResult[]> {
   return enqueue('duckduckgo', async () => {

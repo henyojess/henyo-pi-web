@@ -1,3 +1,49 @@
+import { delay } from '../../user-agents';
+
+// ─── CAPTCHA / rate-limit detection ──────────────────────────────────────────
+
+const CAPTCHA_KEYWORDS = [
+  'access denied', 'verify you are human', 'captcha', 'blocked', 'safety check',
+];
+
+export function isCaptchaResponse(body: string): boolean {
+  const lower = body.toLowerCase();
+  return CAPTCHA_KEYWORDS.some(kw => lower.includes(kw));
+}
+
+// ─── Retry wrapper ───────────────────────────────────────────────────────────
+
+export async function withRetry<T>(
+  fn: () => Promise<T>,
+  providerName?: string,
+  maxRetries = 2,
+): Promise<T> {
+  let lastError: unknown;
+  for (let attempt = 0; attempt <= maxRetries; attempt++) {
+    try {
+      return await fn();
+    } catch (err: any) {
+      lastError = err;
+      if (attempt < maxRetries) {
+        const backoffMs = 2000 * Math.pow(2, attempt);
+        await delay(backoffMs);
+      }
+    }
+  }
+  throw lastError;
+}
+
+// ─── Domain extraction ───────────────────────────────────────────────────────
+
+export function extractDomain(url: string): string | undefined {
+  try {
+    const parsed = new URL(url);
+    return parsed.hostname;
+  } catch {
+    return undefined;
+  }
+}
+
 // ─── Search Result ────────────────────────────────────────────────────────────
 
 export interface SearchResult {
