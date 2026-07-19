@@ -130,6 +130,65 @@ export async function fetchPage(options: FetchPageOptions): Promise<FetchResult>
     return result;
   }
 
+  // ─── Binary content detection ──────────────────────────────────────────
+  const binaryTypes = [
+    'application/pdf',
+    'image/',
+    'application/octet-stream',
+    'application/zip',
+    'application/x-tar',
+    'application/gzip',
+    'application/x-bzip',
+    'application/x-7z-compressed',
+    'application/x-rar',
+  ];
+
+  for (const binaryType of binaryTypes) {
+    if (contentType.includes(binaryType)) {
+      let message: string;
+      let source: string;
+
+      if (contentType.includes('application/pdf')) {
+        message = 'This is a PDF document. Use a PDF reader to view it.';
+        source = 'pdf';
+      } else if (contentType.includes('image/')) {
+        message = 'This is an image file. Use an image viewer to view it.';
+        source = 'image';
+      } else if (contentType.includes('application/zip')) {
+        message = 'This is a ZIP archive. Content cannot be displayed as text.';
+        source = 'zip';
+      } else if (contentType.includes('application/x-tar')) {
+        message = 'This is a TAR archive. Content cannot be displayed as text.';
+        source = 'tar';
+      } else if (contentType.includes('application/gzip')) {
+        message = 'This is a GZIP archive. Content cannot be displayed as text.';
+        source = 'gzip';
+      } else if (contentType.includes('application/x-bzip')) {
+        message = 'This is a BZIP archive. Content cannot be displayed as text.';
+        source = 'bzip';
+      } else if (contentType.includes('application/x-7z-compressed')) {
+        message = 'This is a 7Z archive. Content cannot be displayed as text.';
+        source = '7z';
+      } else if (contentType.includes('application/x-rar')) {
+        message = 'This is a RAR archive. Content cannot be displayed as text.';
+        source = 'rar';
+      } else {
+        message = 'This is a binary file. Content cannot be displayed as text.';
+        source = 'binary';
+      }
+
+      const result: FetchResult = {
+        text: message,
+        resolvedUrl,
+        title: '',
+        source,
+        truncated: false,
+      };
+      if (!noCache) cache.put(cacheKey, result);
+      return result;
+    }
+  }
+
   // ─── HTML extraction pipeline ──────────────────────────────────────────
   const extractionResult: ExtractionResult = await extractHtmlContent(text, resolvedUrl, {
     jinaEnabled,
