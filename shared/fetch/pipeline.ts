@@ -8,7 +8,7 @@ import { smartTruncate } from './truncate';
 import { fetchWithRetry } from './retry';
 import { normalizeUrl } from '../format';
 
-export interface FetchOptions {
+export interface FetchPageOptions {
   url: string;
   timeout: number;
   noCache: boolean;
@@ -29,7 +29,7 @@ export interface FetchResult {
   oversized?: boolean;
 }
 
-export async function fetchPage(options: FetchOptions): Promise<FetchResult> {
+export async function fetchPage(options: FetchPageOptions): Promise<FetchResult> {
   const { url, timeout, noCache, config, signal, onUpdate } = options;
   const jinaEnabled = config.jinaEnabled !== false;
   const minDelay = config['min-delay'] ?? 1000;
