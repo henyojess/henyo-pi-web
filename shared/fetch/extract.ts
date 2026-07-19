@@ -26,7 +26,7 @@ export async function extractWithDefuddle(html: string, url: string): Promise<Ex
 
 export async function fetchWithJina(url: string, timeoutMs: number): Promise<{ title: string; bodyText: string }> {
   const controller = new AbortController();
-  setTimeout(() => controller.abort(), Math.min(timeoutMs, 30000));
+  setTimeout(() => controller.abort(), timeoutMs);
 
   const res = await fetch(`https://r.jina.ai/${url}`, {
     signal: controller.signal,

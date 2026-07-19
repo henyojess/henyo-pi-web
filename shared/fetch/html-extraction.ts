@@ -14,10 +14,11 @@ export async function extractHtmlContent(
   url: string,
   options: {
     jinaEnabled: boolean;
+    jinaTimeout: number;
     onUpdate?: FetchPageOptions['onUpdate'];
   },
 ): Promise<ExtractionResult> {
-  const { jinaEnabled, onUpdate } = options;
+  const { jinaEnabled, jinaTimeout, onUpdate } = options;
   let result: ExtractionResult | null = null;
 
   // Step 1: Check for GitHub URLs
@@ -50,7 +51,7 @@ export async function extractHtmlContent(
       } else {
         onUpdate?.({ content: [{ type: 'text', text: '[Defuddle returned low-quality content, trying Jina Reader...]' }] });
         try {
-          const jinaResult = await fetchWithJina(url, 30000);
+          const jinaResult = await fetchWithJina(url, jinaTimeout);
           result = { bodyText: jinaResult.bodyText, title: jinaResult.title, source: 'jina' };
         } catch (err) {
           onUpdate?.({ content: [{ type: 'text', text: `Jina Reader error: ${err.message || err}` }] });
@@ -65,7 +66,7 @@ export async function extractHtmlContent(
       result = { bodyText: html, title: '', source: 'raw' };
     } else {
       try {
-        const jinaResult = await fetchWithJina(url, 30000);
+        const jinaResult = await fetchWithJina(url, jinaTimeout);
         result = { bodyText: jinaResult.bodyText, title: jinaResult.title, source: 'jina' };
       } catch (err) {
         onUpdate?.({ content: [{ type: 'text', text: `Jina Reader error: ${err.message || err}` }] });
