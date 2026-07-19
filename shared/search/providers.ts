@@ -1,6 +1,8 @@
 import { pickRandom, delay, USER_AGENTS, ACCEPT_LANGUAGES } from '../user-agents';
-import { enqueue, SearchResult } from './queue';
+import { enqueue } from './queue';
 import { RateLimitStore, DEFAULT_RATE_LIMIT_COOLDOWNS } from '../cache';
+export { SearchResult } from './providers/base';
+export { SearchProvider, ProviderDefinition, ProviderFn } from './providers/base';
 
 // ─── CAPTCHA / rate-limit detection ──────────────────────────────────────────
 

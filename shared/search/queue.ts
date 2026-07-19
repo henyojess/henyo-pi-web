@@ -1,11 +1,5 @@
 import { delay } from '../user-agents';
-
-export interface SearchResult {
-  title: string;
-  url: string;
-  snippet: string;
-  source?: string;
-}
+import { SearchResult } from './providers/base';
 
 // ─── Per-provider serialization queue (FIFO) ────────────────────────────────
 
