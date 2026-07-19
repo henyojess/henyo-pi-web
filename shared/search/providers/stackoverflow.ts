@@ -1,6 +1,6 @@
 import { pickRandom, delay, USER_AGENTS } from '../../user-agents';
 import { enqueue } from '../queue';
-import { RateLimitStore, DEFAULT_RATE_LIMIT_COOLDOWNS } from '../../cache';
+import { RateLimitStore, DEFAULT_RATE_LIMIT_COOLDOWNS } from '../../rate-limit';
 import { SearchResult, ProviderConfig } from './base';
 
 // ─── StackOverflow API Error ─────────────────────────────────────────────────

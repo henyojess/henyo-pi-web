@@ -1,12 +1,13 @@
-import { createCache, keyToPath } from '../cache';
+import { createCache } from '../cache';
+import { keyToPath } from '../rate-limit';
 import type { WebFetchConfig } from '../config';
 import { pickRandom, delay, USER_AGENTS, ACCEPT_LANGUAGES } from '../user-agents';
-import { extractWithDefuddle, fetchWithJina } from './extract';
-import { isCloudflareChallenge, isProtectedOrJsHeavy, isDefuddleFailure } from './detection';
-import { isGitHubUrl, fetchGitHubContent } from './github';
+import { extractHtmlContent } from './html-extraction';
+import { isCloudflareChallenge } from './detection';
 import { smartTruncate } from './truncate';
 import { fetchWithRetry } from './retry';
 import { normalizeUrl } from '../format';
+import type { ExtractionResult } from './html-extraction';
 
 export interface FetchPageOptions {
   url: string;
@@ -95,68 +96,13 @@ export async function fetchPage(options: FetchPageOptions): Promise<FetchResult>
   }
 
   // ─── HTML extraction pipeline ──────────────────────────────────────────
-  let result: { bodyText: string; title: string; source: string } | null = null;
-
-  // Step 1: Check for GitHub URLs
-  if (isGitHubUrl(resolvedUrl)) {
-    const githubResult = await fetchGitHubContent(text, resolvedUrl);
-    if (githubResult) {
-      result = githubResult;
-    }
-  }
-
-  // Step 2: Detect protected/JS-heavy pages
-  if (!result && !isProtectedOrJsHeavy(text)) {
-    // Safe to try Defuddle
-    try {
-      const extraction = await extractWithDefuddle(text, resolvedUrl);
-      result = {
-        bodyText: extraction.bodyText,
-        title: extraction.title,
-        source: 'defuddle',
-      };
-    } catch (err) {
-      onUpdate?.({ content: [{ type: 'text', text: `Defuddle error: ${err.message || err}` }] });
-    }
-
-    // If Defuddle produced poor results, try Jina
-    if (!result || isDefuddleFailure({ ...result, author: '', description: '', date: '', lang: '' })) {
-      if (!jinaEnabled) {
-        onUpdate?.({ content: [{ type: 'text', text: 'Warning: Defuddle failed and Jina is disabled.' }] });
-        result = { bodyText: text, title: '', source: 'raw' };
-      } else {
-        onUpdate?.({ content: [{ type: 'text', text: '[Defuddle returned low-quality content, trying Jina Reader...]' }] });
-        try {
-          const jinaResult = await fetchWithJina(resolvedUrl, timeout);
-          result = { bodyText: jinaResult.bodyText, title: jinaResult.title, source: 'jina' };
-        } catch (err) {
-          onUpdate?.({ content: [{ type: 'text', text: `Jina Reader error: ${err.message || err}` }] });
-          result = { bodyText: text, title: '', source: 'raw' };
-        }
-      }
-    }
-  } else if (!result && isProtectedOrJsHeavy(text)) {
-    onUpdate?.({ content: [{ type: 'text', text: '[Detected bot protection / JS-heavy page, using Jina Reader directly...]' }] });
-    if (!jinaEnabled) {
-      onUpdate?.({ content: [{ type: 'text', text: 'Warning: Detected protected page and Jina is disabled.' }] });
-      result = { bodyText: text, title: '', source: 'raw' };
-    } else {
-      try {
-        const jinaResult = await fetchWithJina(resolvedUrl, timeout);
-        result = { bodyText: jinaResult.bodyText, title: jinaResult.title, source: 'jina' };
-      } catch (err) {
-        onUpdate?.({ content: [{ type: 'text', text: `Jina Reader error: ${err.message || err}` }] });
-        result = { bodyText: text, title: '', source: 'raw' };
-      }
-    }
-  }
-
-  if (!result) {
-    result = { bodyText: text, title: '', source: 'raw' };
-  }
+  const extractionResult: ExtractionResult = await extractHtmlContent(text, resolvedUrl, {
+    jinaEnabled,
+    onUpdate,
+  });
 
   // Step 3: Smart truncation
-  const truncatedResult = smartTruncate(result.bodyText, result.title || '', headingThreshold);
+  const truncatedResult = smartTruncate(extractionResult.bodyText, extractionResult.title || '', headingThreshold);
 
   // Step 4: Check if content exceeds threshold
   const contentLength = truncatedResult.bodyText.length;
@@ -169,7 +115,7 @@ export async function fetchPage(options: FetchPageOptions): Promise<FetchResult>
       text: truncatedResult.bodyText,
       resolvedUrl,
       title: truncatedResult.title || '',
-      source: result.source || 'defuddle',
+      source: extractionResult.source || 'defuddle',
       truncated: truncatedResult.truncated,
       cacheKey: cacheKey,
       cacheFilePath: cacheFilePath,
@@ -189,7 +135,7 @@ export async function fetchPage(options: FetchPageOptions): Promise<FetchResult>
     text: truncatedResult.bodyText,
     resolvedUrl,
     title: truncatedResult.title || '',
-    source: result.source || 'defuddle',
+    source: extractionResult.source || 'defuddle',
     truncated: truncatedResult.truncated,
   };
 
