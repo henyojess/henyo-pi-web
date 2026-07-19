@@ -68,6 +68,7 @@ export async function fetchPage(options: FetchPageOptions): Promise<FetchResult>
   const headingThreshold = config['heading-threshold'] ?? 40000;
   const contentThreshold = config['content-threshold'] ?? 32000;
   const jinaTimeout = config['jina-timeout'] ?? 30000;
+  const maxResponseSize = config['max-response-size'] ?? 10485760; // 10MB default
   const cacheMaxFiles = config['cache-max-files'] ?? 100;
 
   const cache = createCache(
@@ -91,7 +92,64 @@ export async function fetchPage(options: FetchPageOptions): Promise<FetchResult>
 
   // Fetch with retry
   const { res, url: resolvedUrl } = await fetchWithRetry(url, timeout, headers);
-  const text = await res.text();
+
+  // Check max response size (Content-Length header as early check)
+  const contentLengthHeader = res.headers.get('Content-Length');
+  if (contentLengthHeader && parseInt(contentLengthHeader, 10) > maxResponseSize) {
+    const result: FetchResult = {
+      text: `Response exceeded max-response-size limit of ${maxResponseSize} bytes. Consider reducing content-threshold or using noCache to get a fresh fetch.`,
+      resolvedUrl,
+      title: '',
+      source: 'size-exceeded',
+      truncated: false,
+    };
+    if (!noCache) cache.put(cacheKey, result);
+    return result;
+  }
+
+  // Stream the response with size limit
+  const reader = res.body?.getReader();
+  let text: string;
+  if (reader) {
+    const chunks: Uint8Array[] = [];
+    let totalSize = 0;
+    try {
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        totalSize += value.length;
+        if (totalSize > maxResponseSize) {
+          reader.releaseLock();
+          throw new Error(`Response exceeded max-response-size limit of ${maxResponseSize} bytes. Consider reducing content-threshold or using noCache to get a fresh fetch.`);
+        }
+        chunks.push(value);
+      }
+      const decoder = new TextDecoder();
+      const textBytes = new Uint8Array(totalSize);
+      let offset = 0;
+      for (const chunk of chunks) {
+        textBytes.set(chunk, offset);
+        offset += chunk.length;
+      }
+      text = decoder.decode(textBytes);
+    } catch (e) {
+      if (e instanceof Error && e.message.includes('max-response-size')) {
+        const result: FetchResult = {
+          text: e.message,
+          resolvedUrl,
+          title: '',
+          source: 'size-exceeded',
+          truncated: false,
+        };
+        if (!noCache) cache.put(cacheKey, result);
+        return result;
+      }
+      throw e;
+    }
+  } else {
+    // No body reader, fall back to text()
+    text = await res.text();
+  }
 
   // Cloudflare warning
   if (isCloudflareChallenge(text)) {

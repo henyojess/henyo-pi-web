@@ -20,6 +20,7 @@ export interface WebFetchConfig {
   'heading-threshold'?: number;
   'content-threshold'?: number;
   'jina-timeout'?: number;
+  'max-response-size'?: number;
 }
 export interface Settings {
   'web-search': WebSearchConfig;
@@ -38,6 +39,7 @@ const DEFAULTS: Settings = {
     'heading-threshold': 40000,
     'content-threshold': 32000,
     'jina-timeout': 30000,
+    'max-response-size': 10485760,
   },
   'web-search': {
     'default-context': 'general',
