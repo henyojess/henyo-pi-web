@@ -22,15 +22,15 @@ export interface WebFetchConfig {
   'max-response-size'?: number;
 }
 export interface Settings {
-  'web-search': WebSearchConfig;
-  'web-fetch': WebFetchConfig;
+  'henyo-search': WebSearchConfig;
+  'henyo-fetch': WebFetchConfig;
 }
 
 const HOME = os.homedir();
 const SETTINGS_PATH = path.join(HOME, '.pi', 'settings.json');
 
 const DEFAULTS: Settings = {
-  'web-fetch': {
+  'henyo-fetch': {
     jinaEnabled: true,
     'min-delay': 1000,
     'max-delay': 3000,
@@ -40,7 +40,7 @@ const DEFAULTS: Settings = {
     'jina-timeout': 30000,
     'max-response-size': 10485760,
   },
-  'web-search': {
+  'henyo-search': {
     'default-context': 'general',
     contexts: {
       coding: {
@@ -89,7 +89,7 @@ let _cachedSettings: Settings | null = null;
 // ─── Config Validation ───────────────────────────────────────────────────────
 
 /**
- * Validate web-search config. Throws on missing required fields.
+ * Validate henyo-search config. Throws on missing required fields.
  * - searxng provider requires a `url` in its config
  */
 export function validateWebSearchConfig(config: WebSearchConfig): void {
@@ -102,7 +102,7 @@ export function validateWebSearchConfig(config: WebSearchConfig): void {
         if (!searxngConfig.url || searxngConfig.url.trim() === '') {
           throw new Error(
             `SearXNG provider is configured in "${contextName}" context but "url" is missing or empty. ` +
-            `Add a SearXNG instance URL to your web-search config, or remove searxng from the provider list.`
+            `Add a SearXNG instance URL to your henyo-search config, or remove searxng from the provider list.`
           );
         }
       }
@@ -111,19 +111,19 @@ export function validateWebSearchConfig(config: WebSearchConfig): void {
 }
 
 /**
- * Validate web-fetch config. Currently no required fields, but this
+ * Validate henyo-fetch config. Currently no required fields, but this
  * provides a hook for future validation.
  */
 export function validateWebFetchConfig(_config: WebFetchConfig): void {
-  // No required fields for web-fetch — extend as needed
+  // No required fields for henyo-fetch — extend as needed
 }
 
 /**
  * Validate all loaded config. Throws on first error.
  */
 export function validateConfig(config: Settings): void {
-  validateWebSearchConfig(config['web-search']);
-  validateWebFetchConfig(config['web-fetch']);
+  validateWebSearchConfig(config['henyo-search']);
+  validateWebFetchConfig(config['henyo-fetch']);
 }
 
 export function loadConfig(): Settings {
