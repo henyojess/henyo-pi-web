@@ -15,7 +15,7 @@ export async function searchWikipedia(query: string, _config?: ProviderConfig, s
       );
       if (!searchRes.ok) return [];
       const searchData = await searchRes.json();
-      const [titles, urls, descriptions] = searchData.slice(1);
+      const [titles, descriptions, urls] = searchData.slice(1);
 
       if (!titles || titles.length === 0) return [];
 

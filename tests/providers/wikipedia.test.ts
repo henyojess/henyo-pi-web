@@ -83,7 +83,7 @@ describe('searchWikipedia', () => {
   it('falls back to descriptions when batch API fails', async () => {
     vi.spyOn(global, 'fetch').mockImplementation(async (url: string) => {
       if (url.includes('action=opensearch')) {
-        return new Response(JSON.stringify([null, ['Test'], ['https://en.wikipedia.org/wiki/Test'], ['Desc']]), {
+        return new Response(JSON.stringify([null, ['Test'], ['Desc'], ['https://en.wikipedia.org/wiki/Test']]), {
           status: 200,
           headers: { 'Content-Type': 'application/json' },
         });
@@ -113,7 +113,7 @@ describe('searchWikipedia', () => {
     });
     vi.spyOn(global, 'fetch').mockImplementation(async (url: string) => {
       if (url.includes('action=opensearch')) {
-        return new Response(JSON.stringify([null, ['Test'], ['https://en.wikipedia.org/wiki/Test'], [null]]), {
+        return new Response(JSON.stringify([null, ['Test'], [null], ['https://en.wikipedia.org/wiki/Test']]), {
           status: 200,
           headers: { 'Content-Type': 'application/json' },
         });

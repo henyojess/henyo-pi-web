@@ -201,8 +201,8 @@ export const GITHUB_RESPONSE = JSON.stringify({
 export const WIKIPEDIA_RESPONSE = JSON.stringify([
   null,
   ['JavaScript', 'TypeScript'],
-  ['https://en.wikipedia.org/wiki/JavaScript', 'https://en.wikipedia.org/wiki/TypeScript'],
   ['Programming language', 'Typed superset of JavaScript'],
+  ['https://en.wikipedia.org/wiki/JavaScript', 'https://en.wikipedia.org/wiki/TypeScript'],
 ]);
 
 export const WIKIPEDIA_EXTRACT_RESPONSE = JSON.stringify({
