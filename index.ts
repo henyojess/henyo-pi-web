@@ -7,7 +7,7 @@ import { detectContext, buildProviderChain } from "./shared/search/context";
 import { PROVIDER_MAP } from "./shared/search/providers";
 import type { SearchResult } from "./shared/search/providers";
 import { fetchPage } from "./shared/fetch/pipeline";
-import { formatResults, normalizeUrl, diversifyByDomain } from "./shared/format";
+import { formatResults, normalizeUrl, diversifyByDomain, rankResults } from "./shared/format";
 
 function getCacheDir(subdir: string): string {
   const home = process.env.HOME || process.env.USERPROFILE;
@@ -64,6 +64,10 @@ export default function (pi: ExtensionAPI) {
         1800,
       );
 
+      // Per-context ranking config (default true)
+      const contextConfig = searchConfig.contexts?.[contextName] || {};
+      const rankingEnabled = contextConfig.ranking ?? true;
+
       const cacheKey = `search:${contextName}:${query}`;
       if (!noCache) {
         const cached = cache.get(cacheKey);
@@ -88,10 +92,10 @@ export default function (pi: ExtensionAPI) {
             const diversified = diversifyByDomain(partial, 2);
             return {
               content: [{ type: "text", text: formatResults(diversified) }],
-              details: { count: diversified.length, context: contextName, providers: providerResults.map(p => ({ name: p.name, status: p.status, error: p.error })), aborted: true },
+              details: { count: diversified.length, context: contextName, providers: providerResults.map(p => ({ name: p.name, status: p.status, error: p.error, count: (p as any).count })), aborted: true },
             };
           }
-          return { content: [{ type: "text", text: "Search cancelled" }], details: { count: 0, context: contextName, providers: providerResults.map(p => ({ name: p.name, status: p.status, error: p.error })), aborted: true } };
+          return { content: [{ type: "text", text: "Search cancelled" }], details: { count: 0, context: contextName, providers: providerResults.map(p => ({ name: p.name, status: p.status, error: p.error, count: (p as any).count })), aborted: true } };
         }
 
         const group = providers.filter(p => p.priority === priority);
@@ -100,8 +104,6 @@ export default function (pi: ExtensionAPI) {
             providerResults.push({ name: provider.name, status: 'timeout' });
             continue;
           }
-
-          onUpdate?.({ content: [{ type: "text", text: `  [${provider.name}] Searching...` }] });
 
           try {
             // Provider-specific config
@@ -115,11 +117,9 @@ export default function (pi: ExtensionAPI) {
             } else {
               results = await provider.fn(query, undefined, signal);
             }
-            onUpdate?.({ content: [{ type: "text", text: `  [${provider.name}] Found ${results.length} results` }] });
             allResults.push(...results);
-            providerResults.push({ name: provider.name, status: 'ok' });
+            providerResults.push({ name: provider.name, status: 'ok', count: results.length });
           } catch (err: any) {
-            onUpdate?.({ content: [{ type: "text", text: `  [${provider.name}] Error: ${err.message || err}` }] });
             providerResults.push({ name: provider.name, status: 'error', error: err.message || String(err) });
           }
         }
@@ -134,7 +134,11 @@ export default function (pi: ExtensionAPI) {
         allResults.length = 0;
         allResults.push(...deduped);
 
-        if (allResults.length >= max) break;
+        // Rank results within this priority group (corpus-level BM25)
+        if (rankingEnabled) {
+          allResults.length = 0;
+          allResults.push(...rankResults(query, allResults));
+        }
       }
 
       const diversified = diversifyByDomain(allResults, 2);
@@ -147,13 +151,13 @@ export default function (pi: ExtensionAPI) {
       if (results.length === 0) {
         return {
           content: [{ type: "text", text: "No results found." }],
-          details: { count: 0, context: contextName, providers: providerResults.map(p => ({ name: p.name, status: p.status, error: p.error })) },
+          details: { count: 0, context: contextName, providers: providerResults.map(p => ({ name: p.name, status: p.status, error: p.error, count: (p as any).count })) },
         };
       }
 
       return {
         content: [{ type: "text", text: formatResults(results) }],
-        details: { count: results.length, context: contextName, providers: providerResults.map(p => ({ name: p.name, status: p.status, error: p.error })) },
+        details: { count: results.length, context: contextName, providers: providerResults.map(p => ({ name: p.name, status: p.status, error: p.error, count: (p as any).count })) },
       };
     },
   });

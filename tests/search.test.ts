@@ -1,5 +1,5 @@
 import { detectContext, buildProviderChain, CODING_SIGNALS } from '../shared/search/context';
-import { normalizeUrl, formatResults, diversifyByDomain, bm25Score } from '../shared/format';
+import { normalizeUrl, formatResults, diversifyByDomain, bm25Score, rankResults } from '../shared/format';
 import type { SearchResult } from '../shared/search/providers';
 
 // ─── detectContext ───────────────────────────────────────────────────────────
@@ -284,5 +284,65 @@ describe('bm25Score', () => {
     // Both have IDF since df=1, but title has 2x weight
     expect(titleScore).toBeGreaterThan(0);
     expect(snippetScore).toBeGreaterThan(0);
+  });
+});
+
+// ─── rankResults (corpus-level BM25) ──────────────────────────────────────────
+
+describe('rankResults', () => {
+  it('returns results unchanged for empty query', () => {
+    const results: SearchResult[] = [
+      { title: 'A', url: 'https://a.com', snippet: 'A' },
+      { title: 'B', url: 'https://b.com', snippet: 'B' },
+    ];
+    expect(rankResults('', results)).toEqual(results);
+  });
+
+  it('returns results unchanged for empty results', () => {
+    expect(rankResults('test query', [])).toEqual([]);
+  });
+
+  it('returns single result unchanged', () => {
+    const results: SearchResult[] = [
+      { title: 'A', url: 'https://a.com', snippet: 'A' },
+    ];
+    expect(rankResults('test', results)).toEqual(results);
+  });
+
+  it('ranks results with matching titles higher', () => {
+    const results: SearchResult[] = [
+      { title: 'JavaScript Arrays', url: 'https://a.com', snippet: 'A guide about arrays' },
+      { title: 'Random Topic', url: 'https://b.com', snippet: 'JavaScript arrays are useful data structures' },
+      { title: 'Python Lists', url: 'https://c.com', snippet: 'Not related to JavaScript' },
+    ];
+    const ranked = rankResults('javascript arrays', results);
+    // First result has both terms in title → should be ranked first
+    expect(ranked[0].title).toBe('JavaScript Arrays');
+    // Second result has both terms in snippet → should be second
+    expect(ranked[1].title).toBe('Random Topic');
+  });
+
+  it('rare terms boost results with those terms', () => {
+    const results: SearchResult[] = [
+      { title: 'foobar configuration', url: 'https://a.com', snippet: 'How to configure foobar' },
+      { title: 'Common configuration', url: 'https://b.com', snippet: 'Configuration is a common topic' },
+      { title: 'foobar tutorial', url: 'https://c.com', snippet: 'Learn about foobar basics' },
+    ];
+    const ranked = rankResults('foobar', results);
+    // Results with 'foobar' in title should rank higher than without
+    const noFoobarIdx = ranked.findIndex(r => r.title === 'Common configuration');
+    // The one without 'foobar' should be last (ranked lowest)
+    expect(noFoobarIdx).toBe(2);
+  });
+
+  it('multiple matching terms increase score', () => {
+    const results: SearchResult[] = [
+      { title: 'React Hooks useState', url: 'https://a.com', snippet: 'useState hook for state management' },
+      { title: 'React Hooks', url: 'https://b.com', snippet: 'A guide to React hooks' },
+      { title: 'useState guide', url: 'https://c.com', snippet: 'Everything about useState' },
+    ];
+    const ranked = rankResults('react hooks useState', results);
+    // First result has all 3 terms in title
+    expect(ranked[0].title).toBe('React Hooks useState');
   });
 });

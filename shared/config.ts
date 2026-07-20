@@ -3,13 +3,12 @@ import path from 'node:path';
 import os from 'node:os';
 
 export interface ProviderConfig { priority?: number; url?: string; }
-export interface ContextConfig { [provider: string]: ProviderConfig; }
+export interface ContextConfig { [provider: string]: ProviderConfig; ranking?: boolean; }
 export interface WebSearchConfig {
   'default-context'?: string;
   contexts?: ContextConfig;
   'rate-limit-cooldowns'?: Record<string, number>;
   'max-per-domain'?: number;
-  'ranking-enabled'?: boolean;
   'api-key'?: string;
 }
 export interface WebFetchConfig {
@@ -49,11 +48,13 @@ const DEFAULTS: Settings = {
         stackoverflow: { priority: 1 },
         npm: { priority: 1 },
         github: { priority: 1 },
+        ranking: true,
       },
       general: {
         duckduckgo: { priority: 1 },
         wikipedia: { priority: 1 },
         jina: { priority: 2 },
+        ranking: true,
       },
     },
   },
