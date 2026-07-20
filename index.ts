@@ -14,7 +14,7 @@ import { formatResults, normalizeUrl, diversifyByDomain, rankResults } from "./s
 function getCacheDir(subdir: string): string {
   const home = process.env.HOME || process.env.USERPROFILE;
   if (!process.env.HOME && process.env.USERPROFILE) {
-    console.warn('[web-search] HOME is undefined, using USERPROFILE for cache path');
+    console.warn('[henyo-search] HOME is undefined, using USERPROFILE for cache path');
   }
   return `${home}/.pi/tools-cache/${subdir}`;
 }
@@ -50,8 +50,8 @@ export default function (pi: ExtensionAPI) {
 
   // --- web_search tool ---
   pi.registerTool({
-    name: "web_search",
-    label: "Web Search",
+    name: "henyo_search",
+    label: "Henyo Search",
     description:
       "Search the web using DuckDuckGo, Stack Overflow, npm, GitHub, Wikipedia, " +
       "or Jina. Context-aware routing (coding vs general). Results cached 30 min.",
@@ -78,7 +78,7 @@ export default function (pi: ExtensionAPI) {
     }),
     async execute(_toolCallId, params, signal, onUpdate, _ctx) {
       const { query, max = 10, context = "auto", noCache = false } = params;
-      const searchConfig = config["web-search"];
+      const searchConfig = config["henyo-search"];
       const contextName = context === "auto" ? detectContext(query) : context;
       const providers = buildProviderChain(contextName, searchConfig.contexts || {});
 
@@ -90,7 +90,7 @@ export default function (pi: ExtensionAPI) {
       onUpdate?.({ content: [{ type: "text", text: `Searching ${contextName} context (${providers.length} providers)...` }] });
 
       const cache = createCache<SearchResult[]>(
-        getCacheDir('web_search'),
+        getCacheDir('henyo_search'),
         1800,
       );
 
@@ -192,7 +192,7 @@ export default function (pi: ExtensionAPI) {
       };
     },
     renderCall(args, theme) {
-      return new Text(theme.fg("toolTitle", "web_search ") + theme.fg("muted", `"${args.query}"`), 0, 0);
+      return new Text(theme.fg("toolTitle", "henyo_search ") + theme.fg("muted", `"${args.query}"`), 0, 0);
     },
     renderResult(result, { expanded, isPartial }, theme, context) {
       // Show processing state for partial results
@@ -229,8 +229,8 @@ export default function (pi: ExtensionAPI) {
 
   // --- web_fetch tool ---
   pi.registerTool({
-    name: "web_fetch",
-    label: "Web Fetch",
+    name: "henyo_fetch",
+    label: "Henyo Fetch",
     description:
       "Extract clean readable content from any URL. Uses Defuddle locally with Jina Reader fallback. " +
       "Handles Cloudflare protection, SPAs, GitHub raw files. Cached 1 hour.",
@@ -260,7 +260,7 @@ export default function (pi: ExtensionAPI) {
           url,
           timeout,
           noCache,
-          config: config["web-fetch"],
+          config: config["henyo-fetch"],
           signal,
           onUpdate,
           headers,
