@@ -92,7 +92,7 @@ describe('fetchPage', () => {
     // Clear any existing cache entries that might interfere
     const { createCache } = await import('../shared/cache');
     const testCache = createCache(
-      `${process.env.HOME}/.pi/tools-cache/web_fetch`,
+      `${process.env.HOME}/.pi/tools-cache/henyo_fetch`,
       3600,
       100,
     );
@@ -213,7 +213,7 @@ describe('fetchPage', () => {
     expect(result.oversized).toBe(true);
     expect(result.cacheKey).toBeDefined();
     expect(result.cacheFilePath).toBeDefined();
-    expect(result.cacheFilePath).toContain('.pi/tools-cache/web_fetch/');
+    expect(result.cacheFilePath).toContain('.pi/tools-cache/henyo_fetch/');
     expect(result.cacheFilePath).toContain('.json');
     expect(result.contentLength).toBe(largeContent.length);
   });
@@ -262,7 +262,7 @@ describe('fetchPage', () => {
   it('caches oversized result with noCache: false', async () => {
     const { createCache } = await import('../shared/cache');
     const testCache = createCache(
-      `${process.env.HOME}/.pi/tools-cache/web_fetch`,
+      `${process.env.HOME}/.pi/tools-cache/henyo_fetch`,
       3600,
       100,
     );

@@ -22,11 +22,11 @@ describe('loadConfig', () => {
     const { loadConfig: freshLoad } = await import('../shared/config.ts');
     const config = freshLoad();
 
-    expect(config['web-fetch'].jinaEnabled).toBe(true);
-    expect(config['web-fetch']['min-delay']).toBe(1000);
-    expect(config['web-fetch']['max-delay']).toBe(3000);
-    expect(config['web-search'].contexts?.coding?.duckduckgo?.priority).toBe(1);
-    expect(config['web-search'].contexts?.general?.wikipedia?.priority).toBe(1);
+    expect(config['henyo-fetch'].jinaEnabled).toBe(true);
+    expect(config['henyo-fetch']['min-delay']).toBe(1000);
+    expect(config['henyo-fetch']['max-delay']).toBe(3000);
+    expect(config['henyo-search'].contexts?.coding?.duckduckgo?.priority).toBe(1);
+    expect(config['henyo-search'].contexts?.general?.wikipedia?.priority).toBe(1);
 
     fs.existsSync = origExistsSync;
   });
@@ -36,11 +36,11 @@ describe('loadConfig', () => {
     const origReadFileSync = fs.readFileSync;
 
     const customSettings = {
-      'web-fetch': {
+      'henyo-fetch': {
         'min-delay': 500,
         jinaEnabled: false,
       },
-      'web-search': {
+      'henyo-search': {
         contexts: {
           coding: {
             npm: { priority: 0 },
@@ -63,15 +63,15 @@ describe('loadConfig', () => {
     const config = freshLoad();
 
     // User overrides
-    expect(config['web-fetch']['min-delay']).toBe(500);
-    expect(config['web-fetch'].jinaEnabled).toBe(false);
-    expect(config['web-search'].contexts?.coding?.npm?.priority).toBe(0);
+    expect(config['henyo-fetch']['min-delay']).toBe(500);
+    expect(config['henyo-fetch'].jinaEnabled).toBe(false);
+    expect(config['henyo-search'].contexts?.coding?.npm?.priority).toBe(0);
 
     // Preserved defaults
-    expect(config['web-fetch']['max-delay']).toBe(3000);
-    expect(config['web-fetch']['cache-max-files']).toBe(100);
-    expect(config['web-search'].contexts?.coding?.duckduckgo?.priority).toBe(1);
-    expect(config['web-search'].contexts?.general?.wikipedia?.priority).toBe(1);
+    expect(config['henyo-fetch']['max-delay']).toBe(3000);
+    expect(config['henyo-fetch']['cache-max-files']).toBe(100);
+    expect(config['henyo-search'].contexts?.coding?.duckduckgo?.priority).toBe(1);
+    expect(config['henyo-search'].contexts?.general?.wikipedia?.priority).toBe(1);
 
     fs.existsSync = origExistsSync;
     fs.readFileSync = origReadFileSync;
@@ -94,8 +94,8 @@ describe('loadConfig', () => {
     const { loadConfig: freshLoad } = await import('../shared/config.ts');
     const config = freshLoad();
 
-    expect(config['web-fetch'].jinaEnabled).toBe(true);
-    expect(config['web-fetch']['min-delay']).toBe(1000);
+    expect(config['henyo-fetch'].jinaEnabled).toBe(true);
+    expect(config['henyo-fetch']['min-delay']).toBe(1000);
 
     fs.existsSync = origExistsSync;
     fs.readFileSync = origReadFileSync;
@@ -121,7 +121,7 @@ describe('loadConfig', () => {
     const origReadFileSync = fs.readFileSync;
 
     const customSettings = {
-      'web-search': {
+      'henyo-search': {
         'rate-limit-cooldowns': { duckduckgo: 900_000 },
       },
     };
@@ -139,7 +139,7 @@ describe('loadConfig', () => {
     const { loadConfig: freshLoad } = await import('../shared/config.ts');
     const config = freshLoad();
 
-    expect(config['web-search']['rate-limit-cooldowns']).toEqual({ duckduckgo: 900_000 });
+    expect(config['henyo-search']['rate-limit-cooldowns']).toEqual({ duckduckgo: 900_000 });
 
     fs.existsSync = origExistsSync;
     fs.readFileSync = origReadFileSync;
@@ -150,7 +150,7 @@ describe('loadConfig', () => {
     const origReadFileSync = fs.readFileSync;
 
     const customSettings = {
-      'web-search': {
+      'henyo-search': {
         'max-per-domain': 5,
       },
     };
@@ -168,7 +168,7 @@ describe('loadConfig', () => {
     const { loadConfig: freshLoad } = await import('../shared/config.ts');
     const config = freshLoad();
 
-    expect(config['web-search']['max-per-domain']).toBe(5);
+    expect(config['henyo-search']['max-per-domain']).toBe(5);
 
     fs.existsSync = origExistsSync;
     fs.readFileSync = origReadFileSync;
@@ -179,7 +179,7 @@ describe('loadConfig', () => {
     const origReadFileSync = fs.readFileSync;
 
     const customSettings = {
-      'web-search': {
+      'henyo-search': {
         'ranking-enabled': false,
       },
     };
@@ -197,7 +197,7 @@ describe('loadConfig', () => {
     const { loadConfig: freshLoad } = await import('../shared/config.ts');
     const config = freshLoad();
 
-    expect(config['web-search']['ranking-enabled']).toBe(false);
+    expect(config['henyo-search']['ranking-enabled']).toBe(false);
 
     fs.existsSync = origExistsSync;
     fs.readFileSync = origReadFileSync;
@@ -208,7 +208,7 @@ describe('loadConfig', () => {
     const origReadFileSync = fs.readFileSync;
 
     const customSettings = {
-      'web-search': {
+      'henyo-search': {
         'api-key': 'my-secret-key',
       },
     };
@@ -226,7 +226,7 @@ describe('loadConfig', () => {
     const { loadConfig: freshLoad } = await import('../shared/config.ts');
     const config = freshLoad();
 
-    expect(config['web-search']['api-key']).toBe('my-secret-key');
+    expect(config['henyo-search']['api-key']).toBe('my-secret-key');
 
     fs.existsSync = origExistsSync;
     fs.readFileSync = origReadFileSync;
