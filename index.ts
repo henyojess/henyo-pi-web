@@ -1,5 +1,7 @@
-import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
+import type { ExtensionAPI, Theme } from "@earendil-works/pi-coding-agent";
+import { keyHint } from "@earendil-works/pi-coding-agent";
 import { Type } from "typebox";
+import { Text } from "@earendil-works/pi-tui";
 
 import { loadConfig, validateConfig } from "./shared/config";
 import { createCache } from "./shared/cache";
@@ -15,6 +17,31 @@ function getCacheDir(subdir: string): string {
     console.warn('[web-search] HOME is undefined, using USERPROFILE for cache path');
   }
   return `${home}/.pi/tools-cache/${subdir}`;
+}
+
+// ─── TUI rendering helpers ───────────────────────────────────────────────────
+
+function buildCollapsedHeader(details: { query?: string; context?: string; count?: number; providers?: Array<{ name: string; status: string; error?: string; count?: number }> }, theme: Theme): string {
+  const context = details.context ?? 'general';
+  const count = details.count ?? 0;
+
+  if (details.providers && details.providers.length > 0) {
+    const sorted = [...details.providers].sort((a, b) => (b.count ?? 0) - (a.count ?? 0));
+    const providerParts = sorted.map(p => {
+      if (p.status === 'error') {
+        return `${theme.fg('error', `${p.name}(error)`)}`;
+      }
+      return `${theme.fg('muted', `${p.name}:${p.count ?? 0}`)}`;
+    });
+    return `${theme.fg('muted', `${context}(${count}) · ${providerParts.join(' ')}`)}`;
+  }
+
+  return theme.fg('muted', `${context}(${count})`);
+}
+
+function buildExpandedContent(result: { content: Array<{ type: string; text: string }> }): string {
+  const textContent = result.content.find(c => c.type === 'text');
+  return textContent?.text ?? '';
 }
 
 export default function (pi: ExtensionAPI) {
@@ -58,6 +85,9 @@ export default function (pi: ExtensionAPI) {
       if (providers.length === 0) {
         throw new Error(`No providers configured for context: ${contextName}`);
       }
+
+      // Single progress update at start
+      onUpdate?.({ content: [{ type: "text", text: `Searching ${contextName} context (${providers.length} providers)...` }] });
 
       const cache = createCache<SearchResult[]>(
         getCacheDir('web_search'),
@@ -136,8 +166,9 @@ export default function (pi: ExtensionAPI) {
 
         // Rank results within this priority group (corpus-level BM25)
         if (rankingEnabled) {
+          const ranked = rankResults(query, allResults);
           allResults.length = 0;
-          allResults.push(...rankResults(query, allResults));
+          allResults.push(...ranked);
         }
       }
 
@@ -159,6 +190,40 @@ export default function (pi: ExtensionAPI) {
         content: [{ type: "text", text: formatResults(results) }],
         details: { count: results.length, context: contextName, providers: providerResults.map(p => ({ name: p.name, status: p.status, error: p.error, count: (p as any).count })) },
       };
+    },
+    renderCall(args, theme) {
+      return new Text(theme.fg("toolTitle", "web_search ") + theme.fg("muted", `"${args.query}"`), 0, 0);
+    },
+    renderResult(result, { expanded, isPartial }, theme, context) {
+      // Show processing state for partial results
+      if (isPartial) {
+        return new Text(theme.fg("muted", "Processing..."), 0, 0);
+      }
+
+      // Build header with query, context, count, and provider breakdown
+      const details = (result.details as any) || {};
+      const providers = details.providers || [];
+      // Calculate count from providers (more reliable than details.count which may be filtered by TUI)
+      const count = providers.reduce((sum: number, p: any) => sum + (p.count ?? 0), 0);
+      let header = buildCollapsedHeader({
+        query: context?.args?.query ?? details.query ?? '',
+        context: details.context,
+        count: count,
+        providers: providers,
+      }, theme);
+
+      if (expanded) {
+        // Append full content text
+        const expandedText = buildExpandedContent(result);
+        if (expandedText) {
+          header = `${header}\n\n${expandedText}`;
+        }
+      } else {
+        // Show key hint so users know how to expand
+        header = `${header} (${theme.fg("muted", "press " + keyHint("app.tools.expand", "to expand"))})`;
+      }
+
+      return new Text(header, 0, 0);
     },
   });
 
