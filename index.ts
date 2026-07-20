@@ -48,7 +48,7 @@ export default function (pi: ExtensionAPI) {
   const config = loadConfig();
   validateConfig(config);
 
-  // --- web_search tool ---
+  // --- henyo_search tool ---
   pi.registerTool({
     name: "henyo_search",
     label: "Henyo Search",
@@ -227,7 +227,7 @@ export default function (pi: ExtensionAPI) {
     },
   });
 
-  // --- web_fetch tool ---
+  // --- henyo_fetch tool ---
   pi.registerTool({
     name: "henyo_fetch",
     label: "Henyo Fetch",

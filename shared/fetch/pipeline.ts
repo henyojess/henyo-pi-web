@@ -13,7 +13,7 @@ import type { ExtractionResult } from './html-extraction';
 function getCacheDir(subdir: string): string {
   const home = process.env.HOME || process.env.USERPROFILE;
   if (!process.env.HOME && process.env.USERPROFILE) {
-    console.warn('[web-fetch] HOME is undefined, using USERPROFILE for cache path');
+    console.warn('[henyo-fetch] HOME is undefined, using USERPROFILE for cache path');
   }
   return `${home}/.pi/tools-cache/${subdir}`;
 }
@@ -172,7 +172,7 @@ export async function fetchPage(options: FetchPageOptions): Promise<FetchResult>
       if (!noCache) cache.put(cacheKey, result);
       return result;
     } catch (e) {
-      console.warn(`[web-fetch] JSON parse error for ${url}: ${e instanceof Error ? e.message : String(e)}`);
+      console.warn(`[henyo-fetch] JSON parse error for ${url}: ${e instanceof Error ? e.message : String(e)}`);
       // Fall through to treat as raw text
     }
   }
