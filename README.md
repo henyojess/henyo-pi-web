@@ -24,7 +24,7 @@ pi install npm:henyo-pi-web
 
 ### `web_search`
 
-Search the web using DuckDuckGo, Stack Overflow, npm, GitHub, Wikipedia, Jina, or a custom SearXNG instance. Context-aware routing (coding vs general), BM25 ranking, domain diversification, and provider-level result counts. Results cached 30 min.
+Search the web using DuckDuckGo, Stack Overflow, npm, GitHub, Wikipedia, or a custom SearXNG instance. Jina is available via config but requires an API key. Context-aware routing (coding vs general), BM25 ranking, domain diversification, and provider-level result counts. Results cached 30 min.
 
 **Parameters:**
 
@@ -90,7 +90,6 @@ Optional settings go in `~/.pi/settings.json`:
       "general": {
         "duckduckgo": { "priority": 1 },
         "wikipedia": { "priority": 1 },
-        "jina": { "priority": 2 },
         "ranking": true
       }
     }
@@ -110,6 +109,8 @@ Optional settings go in `~/.pi/settings.json`:
 | `api-key` | string | StackOverflow API key (optional) |
 | `rate-limit-cooldowns` | object | Per-provider cooldown in seconds |
 | `max-per-domain` | number | Max results per domain |
+
+> **Note:** Jina is available as a provider but requires an API key. Add it manually via `contexts.general.jina` config if you have a Jina API key.
 
 **web-fetch config options:**
 

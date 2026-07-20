@@ -53,7 +53,6 @@ const DEFAULTS: Settings = {
       general: {
         duckduckgo: { priority: 1 },
         wikipedia: { priority: 1 },
-        jina: { priority: 2 },
         ranking: true,
       },
     },

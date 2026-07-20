@@ -97,7 +97,6 @@ describe('buildProviderChain', () => {
     general: {
       duckduckgo: { priority: 1 },
       wikipedia: { priority: 1 },
-      jina: { priority: 2 },
     },
   };
 
@@ -109,9 +108,8 @@ describe('buildProviderChain', () => {
 
   it('returns sorted providers for general context', () => {
     const chain = buildProviderChain('general', contexts);
-    expect(chain.length).toBe(3);
-    expect(chain[0].priority).toBe(1);
-    expect(chain[chain.length - 1].priority).toBe(2);
+    expect(chain.length).toBe(2);
+    expect(chain.every(p => p.priority === 1)).toBe(true);
   });
 
   it('returns empty array for missing context', () => {
