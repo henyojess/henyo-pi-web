@@ -69,7 +69,7 @@ export default function (pi: ExtensionAPI) {
         Type.Literal("auto"),
       ], {
         default: "auto",
-        description: "Context: coding (SO, npm, GitHub), general (Wikipedia), or auto-detect"
+        description: "Context: coding (SO, npm, GitHub), general (DDG, Wikipedia), or auto-detect"
       })),
       noCache: Type.Optional(Type.Boolean({
         default: false,
