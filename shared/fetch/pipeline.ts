@@ -72,7 +72,7 @@ export async function fetchPage(options: FetchPageOptions): Promise<FetchResult>
   const cacheMaxFiles = config['cache-max-files'] ?? 100;
 
   const cache = createCache(
-    getCacheDir('web_fetch'),
+    getCacheDir('henyo_fetch'),
     3600,
     cacheMaxFiles,
   );
@@ -263,7 +263,7 @@ export async function fetchPage(options: FetchPageOptions): Promise<FetchResult>
   const contentLength = truncatedResult.bodyText.length;
   if (contentLength > contentThreshold) {
     const cacheFilePath = keyToPath(
-      getCacheDir('web_fetch'),
+      getCacheDir('henyo_fetch'),
       cacheKey,
     );
     const fetchResult: FetchResult = {

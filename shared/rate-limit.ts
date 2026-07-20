@@ -9,7 +9,7 @@ const RATE_LIMIT_DIR = path.join(
   os.homedir(),
   '.pi',
   'tools-cache',
-  'web_search',
+  'henyo_search',
   'rate-limit.json',
 );
 
