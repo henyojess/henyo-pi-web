@@ -18,11 +18,13 @@ Or run directly:
 pi install npm:henyo-pi-web
 ```
 
-> `pi install` automatically resolves npm dependencies (`defuddle`, `jsdom`) and registers two native tools: `web_search` and `web_fetch`.
+> `pi install` automatically resolves npm dependencies (`defuddle`, `jsdom`) and registers two native tools: `henyo_search` and `henyo_fetch`.
+
+> **Breaking change (v2.0):** Config keys changed from `web-search`/`web-fetch` to `henyo-search`/`henyo-fetch`. Update your `~/.pi/settings.json` accordingly. Cache directory changed from `.pi/tools-cache/web_search`/`web_fetch` to `.pi/tools-cache/henyo_search`/`henyo_fetch` — old cache files will be ignored.
 
 ## Tools
 
-### `web_search`
+### `henyo_search`
 
 Search the web using DuckDuckGo, Stack Overflow, npm, GitHub, Wikipedia, or a custom SearXNG instance. Jina is available via config but requires an API key. Context-aware routing (coding vs general), BM25 ranking, domain diversification, and provider-level result counts. Results cached 30 min.
 
@@ -42,7 +44,7 @@ Search the web using DuckDuckGo, Stack Overflow, npm, GitHub, Wikipedia, or a cu
 - Reports per-provider status (ok/error/timeout) with result counts
 - Supports partial results on abort
 
-### `web_fetch`
+### `henyo_fetch`
 
 Extract clean readable content from any URL. Uses Defuddle locally with Jina Reader fallback. Handles Cloudflare protection, SPAs, GitHub raw files, JSON, plain text, and binary content detection (PDF, images, archives). Includes SSRF protection. Cached 1 hour.
 
@@ -67,7 +69,7 @@ Optional settings go in `~/.pi/settings.json`:
 
 ```json
 {
-  "web-fetch": {
+  "henyo-fetch": {
     "jinaEnabled": true,
     "min-delay": 1000,
     "max-delay": 3000,
@@ -77,7 +79,7 @@ Optional settings go in `~/.pi/settings.json`:
     "jina-timeout": 30000,
     "max-response-size": 10485760
   },
-  "web-search": {
+  "henyo-search": {
     "default-context": "general",
     "contexts": {
       "coding": {
@@ -97,7 +99,7 @@ Optional settings go in `~/.pi/settings.json`:
 }
 ```
 
-**web-search config options:**
+**henyo-search config options:**
 
 | Option | Type | Description |
 |--------|------|-------------|
@@ -112,7 +114,7 @@ Optional settings go in `~/.pi/settings.json`:
 
 > **Note:** Jina is available as a provider but requires an API key. Add it manually via `contexts.general.jina` config if you have a Jina API key.
 
-**web-fetch config options:**
+**henyo-fetch config options:**
 
 | Option | Type | Default | Description |
 |--------|------|---------|-------------|
