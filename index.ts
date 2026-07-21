@@ -213,10 +213,10 @@ export default function (pi: ExtensionAPI) {
       }, theme);
 
       if (expanded) {
-        // Append full content text
+        // Append full content text with collapse hint
         const expandedText = buildExpandedContent(result);
         if (expandedText) {
-          header = `${header}\n\n${expandedText}`;
+          header = `${expandedText}\n\n(${theme.fg("muted", "press " + keyHint("app.tools.expand", "to collapse"))})`;
         }
       } else {
         // Show key hint so users know how to expand
