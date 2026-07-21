@@ -220,7 +220,7 @@ export default function (pi: ExtensionAPI) {
         }
       } else {
         // Show key hint so users know how to expand
-        header = `${header} (${theme.fg("muted", "press " + keyHint("app.tools.expand", "to expand"))})`;
+        header = `${header}\n(${theme.fg("muted", "press " + keyHint("app.tools.expand", "to expand"))})`;
       }
 
       return new Text(header, 0, 0);
