@@ -4,6 +4,7 @@ import { Type } from "typebox";
 import { Text } from "@earendil-works/pi-tui";
 import fs from "node:fs";
 import { FetchResultUI, buildErrorFetchHeader, buildExpandedFetchContent, buildCollapsedFetchHeader } from "./shared/fetch/ui.js";
+import type { FetchErrorCategory } from "./shared/fetch/pipeline.js";
 const LOG = "/tmp/henyo-fetch-debug.log";
 function log(...args: any[]) {
   fs.appendFileSync(LOG, `[${new Date().toISOString()}] ${args.map(a => typeof a === 'object' ? JSON.stringify(a, null, 2) : String(a)).join(' ')}\n`);
@@ -17,6 +18,7 @@ import type { SearchResult } from "./shared/search/providers";
 import { fetchPage } from "./shared/fetch/pipeline";
 import { formatResults, normalizeUrl, diversifyByDomain, rankResults } from "./shared/format";
 import { buildCollapsedFetchHeader, buildExpandedFetchContent, buildErrorFetchHeader, type FetchResultUI } from "./shared/fetch/ui";
+import type { FetchErrorCategory } from "./shared/fetch/pipeline";
 
 function getCacheDir(subdir: string): string {
   const home = process.env.HOME || process.env.USERPROFILE;
@@ -306,15 +308,29 @@ export default function (pi: ExtensionAPI) {
             truncated: result.truncated,
             contentLengthKB: result.contentLengthKB,
             sizeLabel: result.sizeLabel,
+            cached: result.cached,
+            cacheFilePath: result.cacheFilePath,
+            contentLength: result.contentLength,
           },
         };
       } catch (err: any) {
-        const errorCategory = err.message?.includes('SSRF') ? 'ssrf' :
-          err.message?.includes('invalid URL') ? 'invalid-url' :
-          err.message?.includes('timeout') ? 'timeout' :
-          err.message?.includes('failed after') ? 'network' :
+        const message = err.message || String(err);
+        const errorCategory: FetchErrorCategory = message.includes('ssrf') ? 'ssrf' :
+          message.includes('invalid URL') ? 'invalid-url' :
+          message.includes('timeout') ? 'timeout' :
+          message.includes('404') ? 'not-found' :
+          message.includes('403') || message.includes('forbidden') ? 'forbidden' :
+          message.includes('500') || message.includes('502') || message.includes('503') ? 'server-error' :
+          message.includes('fetch failed') || message.includes('network') || message.includes('failed after') ? 'network' :
           'unknown';
-        throw Object.assign(new Error(err.message || String(err)), { errorCategory });
+        return {
+          content: [{ type: "text", text: message }],
+          details: {
+            url: params.url,
+            error: message,
+            errorCategory,
+          },
+        };
       }
     renderCall(args, theme) {
       return new Text(theme.fg("toolTitle", "henyo_fetch ") + theme.fg("muted", `"${args.url}"`), 0, 0);
@@ -353,26 +369,26 @@ export default function (pi: ExtensionAPI) {
         ui.error = err?.message || err || details.error;
         ui.errorCategory = details.errorCategory;
         const header = buildErrorFetchHeader(ui, theme);
-        if (expanded) {
-          return new Text(`${header}\n\n(${theme.fg("muted", "press " + keyHint("app.tools.expand", "to collapse"))})`, 0, 0);
-        }
-        return new Text(`${header}\n(${theme.fg("muted", "press " + keyHint("app.tools.expand", "to expand"))})`, 0, 0);
+        const text = new Text(`${header}\n(${theme.fg("muted", "press " + keyHint("app.tools.expand", "to expand"))})`, 0, 0);
+        log('renderResult: returning error=' + text.text.substring(0, 80));
+        return text;
       }
 
       if (expanded) {
         log('renderResult: expanded path');
         const expandedText = buildExpandedFetchContent(ui, theme, keyHint);
         if (expandedText) {
-          return new Text(expandedText, 0, 0);
+          const text = new Text(expandedText, 0, 0);
+          log('renderResult: returning expanded=' + text.text.substring(0, 80));
+          return text;
         }
       }
 
       log('renderResult: collapsed path');
       try {
         const header = buildCollapsedFetchHeader(ui, theme);
-        log('renderResult: header=' + header.substring(0, 50));
         const text = new Text(`${header}\n(${theme.fg("muted", "press " + keyHint("app.tools.expand", "to expand"))})`, 0, 0);
-        log('renderResult: returning Text');
+        log('renderResult: returning collapsed=' + text.text.substring(0, 80));
         return text;
       } catch (e: any) {
         log('renderResult: ERROR ' + e.message);

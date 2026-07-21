@@ -1,5 +1,5 @@
 import { delay } from '../user-agents';
-import { SearchResult } from './providers/base';
+import type { SearchResult } from './providers/base';
 
 // ─── Per-provider serialization queue (FIFO) ────────────────────────────────
 

@@ -74,6 +74,28 @@ describe('fetchPage', () => {
     expect(result2.source).toBe(result1.source);
   });
 
+  it('marks cached results with cached: true flag', async () => {
+    // Clear cache to avoid interference from previous tests
+    const { createCache } = await import('../shared/cache');
+    const testCache = createCache(
+      `${process.env.HOME}/.pi/tools-cache/henyo_fetch`,
+      3600,
+      100,
+    );
+    testCache.clear();
+
+    mockHtmlFetch();
+    (extractWithDefuddle as any).mockResolvedValue({
+      bodyText: 'Cached content with enough text to pass quality checks for the extraction pipeline.',
+      title: 'Cached Title',
+      author: '', description: '', date: '', lang: '',
+    });
+    const result1 = await fetchPage({ url: 'https://example.com', timeout: 10000, noCache: false, config });
+    const result2 = await fetchPage({ url: 'https://example.com', timeout: 10000, noCache: false, config });
+    expect(result1.cached).toBeUndefined(); // first call is not cached
+    expect(result2.cached).toBe(true); // second call is from cache
+  });
+
   it('skips cache with noCache: true', async () => {
     mockHtmlFetch();
     let callCount = 0;

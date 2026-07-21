@@ -1,4 +1,5 @@
-import { SearchResult, SearchProvider, ProviderDefinition, ProviderFn, ProviderConfig, extractDomain } from './base';
+import type { SearchResult, SearchProvider, ProviderDefinition, ProviderFn, ProviderConfig } from './base';
+import { extractDomain } from './base';
 import { searchDuckDuckGo } from './duckduckgo';
 import { searchStackOverflow, StackOverflowAPIError, searchStackOverflowAPI } from './stackoverflow';
 import { searchNpm } from './npm';
@@ -8,12 +9,14 @@ import { searchJina } from './jina';
 import { searchSearXNG } from './searxng';
 
 // Re-export all provider functions and types
-export {
+export type {
   SearchResult,
   SearchProvider,
   ProviderDefinition,
   ProviderFn,
   ProviderConfig,
+};
+export {
   searchDuckDuckGo,
   searchStackOverflow,
   searchStackOverflowAPI,

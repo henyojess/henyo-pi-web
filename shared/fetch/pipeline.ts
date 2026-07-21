@@ -58,6 +58,9 @@ export interface FetchPageOptions {
   headers?: Record<string, string>;
 }
 
+/** Error category for fetch failures — used for UX display and actionable guidance. */
+export type FetchErrorCategory = 'ssrf' | 'invalid-url' | 'network' | 'timeout' | 'size-exceeded' | 'extraction-failed' | 'cloudflare' | 'not-found' | 'forbidden' | 'server-error' | 'unknown';
+
 export interface FetchResult {
   text: string;
   resolvedUrl: string;
@@ -70,6 +73,8 @@ export interface FetchResult {
   cacheFilePath?: string;
   contentLength?: number;
   oversized?: boolean;
+  errorCategory?: FetchErrorCategory;
+  cached?: boolean;
 }
 
 export async function fetchPage(options: FetchPageOptions): Promise<FetchResult> {
@@ -86,12 +91,12 @@ export async function fetchPage(options: FetchPageOptions): Promise<FetchResult>
     if (e instanceof Error && e.message.startsWith('SSRF protection')) {
       throw e;
     }
-    throw new Error(`SSRF protection blocked request to ${url}: invalid URL format`);
+    throw new Error(`invalid URL format — use https://...`);
   }
 
   // SSRF protection — block private/reserved IPs and dangerous schemes
   if (!isSafeUrl(url)) {
-    throw new Error(`SSRF protection blocked request to ${url}`);
+    throw new Error(`ssrf blocked: ${url}`);
   }
 
   const jinaEnabled = config.jinaEnabled !== false;
@@ -115,7 +120,7 @@ export async function fetchPage(options: FetchPageOptions): Promise<FetchResult>
   if (!noCache) {
     const cached = cache.get(cacheKey);
     if (cached) {
-      return cached;
+      return { ...cached, cached: true };
     }
   }
 
@@ -291,8 +296,24 @@ export async function fetchPage(options: FetchPageOptions): Promise<FetchResult>
     onUpdate,
   });
 
+  // Step 2.5: Title fallback — if extraction returned no title, derive from URL
+  let title = extractionResult.title || '';
+  if (!title || title === 'Untitled' || /^https?:\/\/[^/]+/i.test(title)) {
+    try {
+      const urlObj = new URL(resolvedUrl);
+      const pathParts = urlObj.pathname.split('/').filter(Boolean);
+      if (pathParts.length > 0) {
+        title = pathParts[pathParts.length - 1]!.replace(/[-_]/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+      } else {
+        title = urlObj.hostname.replace(/^www\./, '');
+      }
+    } catch {
+      // URL parsing failed, keep empty title
+    }
+  }
+
   // Step 3: Smart truncation
-  const truncatedResult = smartTruncate(extractionResult.bodyText, extractionResult.title || '', headingThreshold);
+  const truncatedResult = smartTruncate(extractionResult.bodyText, title, headingThreshold);
 
   // Step 4: Check if content exceeds threshold
   const contentLength = truncatedResult.bodyText.length;
@@ -314,6 +335,7 @@ export async function fetchPage(options: FetchPageOptions): Promise<FetchResult>
       cacheFilePath: cacheFilePath,
       contentLength: contentLength,
       oversized: true,
+      errorCategory: 'size-exceeded',
     };
 
     // Cache the full result
