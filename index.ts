@@ -203,8 +203,8 @@ export default function (pi: ExtensionAPI) {
       // Build header with query, context, count, and provider breakdown
       const details = (result.details as any) || {};
       const providers = details.providers || [];
-      // Calculate count from providers (more reliable than details.count which may be filtered by TUI)
-      const count = providers.reduce((sum: number, p: any) => sum + (p.count ?? 0), 0);
+      // Use the post-slice count from execute() — accurate after dedup/rank/diversify/max
+      const count = details.count ?? providers.reduce((sum: number, p: any) => sum + (p.count ?? 0), 0);
       let header = buildCollapsedHeader({
         query: context?.args?.query ?? details.query ?? '',
         context: details.context,
