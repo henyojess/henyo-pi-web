@@ -2,6 +2,12 @@ import type { ExtensionAPI, Theme } from "@earendil-works/pi-coding-agent";
 import { keyHint } from "@earendil-works/pi-coding-agent";
 import { Type } from "typebox";
 import { Text } from "@earendil-works/pi-tui";
+import fs from "node:fs";
+import { FetchResultUI, buildErrorFetchHeader, buildExpandedFetchContent, buildCollapsedFetchHeader } from "./shared/fetch/ui.js";
+const LOG = "/tmp/henyo-fetch-debug.log";
+function log(...args: any[]) {
+  fs.appendFileSync(LOG, `[${new Date().toISOString()}] ${args.map(a => typeof a === 'object' ? JSON.stringify(a, null, 2) : String(a)).join(' ')}\n`);
+}
 
 import { loadConfig, validateConfig } from "./shared/config";
 import { createCache } from "./shared/cache";
@@ -10,6 +16,7 @@ import { PROVIDER_MAP } from "./shared/search/providers";
 import type { SearchResult } from "./shared/search/providers";
 import { fetchPage } from "./shared/fetch/pipeline";
 import { formatResults, normalizeUrl, diversifyByDomain, rankResults } from "./shared/format";
+import { buildCollapsedFetchHeader, buildExpandedFetchContent, buildErrorFetchHeader, type FetchResultUI } from "./shared/fetch/ui";
 
 function getCacheDir(subdir: string): string {
   const home = process.env.HOME || process.env.USERPROFILE;
@@ -203,8 +210,8 @@ export default function (pi: ExtensionAPI) {
       // Build header with query, context, count, and provider breakdown
       const details = (result.details as any) || {};
       const providers = details.providers || [];
-      // Calculate count from providers (more reliable than details.count which may be filtered by TUI)
-      const count = providers.reduce((sum: number, p: any) => sum + (p.count ?? 0), 0);
+      // Use the post-slice count from execute() — accurate after dedup/rank/diversify/max
+      const count = details.count ?? providers.reduce((sum: number, p: any) => sum + (p.count ?? 0), 0);
       let header = buildCollapsedHeader({
         query: context?.args?.query ?? details.query ?? '',
         context: details.context,
@@ -213,14 +220,14 @@ export default function (pi: ExtensionAPI) {
       }, theme);
 
       if (expanded) {
-        // Append full content text
+        // Append full content text with collapse hint
         const expandedText = buildExpandedContent(result);
         if (expandedText) {
-          header = `${header}\n\n${expandedText}`;
+          header = `${expandedText}\n\n(${theme.fg("muted", "press " + keyHint("app.tools.expand", "to collapse"))})`;
         }
       } else {
         // Show key hint so users know how to expand
-        header = `${header} (${theme.fg("muted", "press " + keyHint("app.tools.expand", "to expand"))})`;
+        header = `${header}\n(${theme.fg("muted", "press " + keyHint("app.tools.expand", "to expand"))})`;
       }
 
       return new Text(header, 0, 0);
@@ -250,10 +257,12 @@ export default function (pi: ExtensionAPI) {
         description: "Custom HTTP headers (e.g., { 'Authorization': 'Bearer token' })",
       })),
     }),
-    async execute(_toolCallId, params, signal, onUpdate, _ctx) {
+    async execute(toolCallId, params, signal, onUpdate, _ctx) {
       const { url, timeout = 15000, noCache = false, headers } = params;
+      log('execute: toolCallId=' + toolCallId + ' url=' + url);
 
       onUpdate?.({ content: [{ type: "text", text: `Fetching ${url}...` }] });
+      log('execute: onUpdate called');
 
       try {
         const result = await fetchPage({
@@ -268,11 +277,10 @@ export default function (pi: ExtensionAPI) {
 
         // Handle oversized content — return metadata only, let agent decide
         if (result.oversized) {
-          const sizeKB = (result.contentLength! / 1024).toFixed(1);
           return {
             content: [{
               type: "text",
-              text: `[Cached — ${sizeKB} KB]\n\nURL: ${result.resolvedUrl}\nTitle: ${result.title}\nSource: ${result.source}\nCache: ${result.cacheFilePath}]`,
+              text: `[Cached — ${result.sizeLabel || result.contentLengthKB?.toFixed(1) || '?'}]\n\nURL: ${result.resolvedUrl}\nTitle: ${result.title}\nSource: ${result.source}\nCache: ${result.cacheFilePath}]`,
             }],
             details: {
               url: result.resolvedUrl,
@@ -281,7 +289,10 @@ export default function (pi: ExtensionAPI) {
               cached: true,
               cacheFilePath: result.cacheFilePath,
               contentLength: result.contentLength,
-              contentLengthKB: Number(sizeKB),
+              contentLengthKB: result.contentLengthKB,
+              sizeLabel: result.sizeLabel,
+              oversized: true,
+              truncated: result.truncated,
             },
           };
         }
@@ -293,11 +304,127 @@ export default function (pi: ExtensionAPI) {
             title: result.title,
             source: result.source,
             truncated: result.truncated,
+            contentLengthKB: result.contentLengthKB,
+            sizeLabel: result.sizeLabel,
           },
         };
       } catch (err: any) {
-        throw new Error(`Failed to fetch ${url}: ${err.message || err}`);
+        const errorCategory = err.message?.includes('SSRF') ? 'ssrf' :
+          err.message?.includes('invalid URL') ? 'invalid-url' :
+          err.message?.includes('timeout') ? 'timeout' :
+          err.message?.includes('failed after') ? 'network' :
+          'unknown';
+        throw Object.assign(new Error(err.message || String(err)), { errorCategory });
       }
+    renderCall(args, theme) {
+      return new Text(theme.fg("toolTitle", "henyo_fetch ") + theme.fg("muted", `"${args.url}"`), 0, 0);
+    },
+    renderResult(result, { expanded, isPartial }, theme, context) {
+      log('renderResult: isPartial=' + isPartial + ' expanded=' + expanded + ' contextToolCallId=' + (context as any)?.toolCallId + ' contextArgs=' + JSON.stringify((context as any)?.args));
+      // Show processing state for partial results
+      if (isPartial) {
+        log('renderResult: returning processing');
+        return new Text(theme.fg("muted", "Processing..."), 0, 0);
+      }
+
+      log('renderResult: building UI');
+      const details = (result.details as any) || {};
+      log('renderResult: details=' + JSON.stringify(details));
+      const ui: FetchResultUI = {
+        url: details.url ?? context?.args?.url ?? '',
+        title: details.title ?? '',
+        source: details.source ?? 'unknown',
+        sizeLabel: details.sizeLabel,
+        contentLengthKB: details.contentLengthKB,
+        truncated: details.truncated,
+        oversized: details.oversized,
+        cached: details.cached,
+        cacheFilePath: details.cacheFilePath,
+        error: undefined,
+        errorCategory: undefined,
+        content: result.content?.[0]?.type === 'text' ? result.content[0].text : '',
+      };
+      log('renderResult: ui=' + JSON.stringify({ url: ui.url, title: ui.title, source: ui.source, truncated: ui.truncated, oversized: ui.oversized }));
+
+      // Check for error in the result
+      const err = (result as any).error;
+      if (err || details.errorCategory) {
+        log('renderResult: error path');
+        ui.error = err?.message || err || details.error;
+        ui.errorCategory = details.errorCategory;
+        const header = buildErrorFetchHeader(ui, theme);
+        if (expanded) {
+          return new Text(`${header}\n\n(${theme.fg("muted", "press " + keyHint("app.tools.expand", "to collapse"))})`, 0, 0);
+        }
+        return new Text(`${header}\n(${theme.fg("muted", "press " + keyHint("app.tools.expand", "to expand"))})`, 0, 0);
+      }
+
+      if (expanded) {
+        log('renderResult: expanded path');
+        const expandedText = buildExpandedFetchContent(ui, theme, keyHint);
+        if (expandedText) {
+          return new Text(expandedText, 0, 0);
+        }
+      }
+
+      log('renderResult: collapsed path');
+      try {
+        const header = buildCollapsedFetchHeader(ui, theme);
+        log('renderResult: header=' + header.substring(0, 50));
+        const text = new Text(`${header}\n(${theme.fg("muted", "press " + keyHint("app.tools.expand", "to expand"))})`, 0, 0);
+        log('renderResult: returning Text');
+        return text;
+      } catch (e: any) {
+        log('renderResult: ERROR ' + e.message);
+        return new Text('[ERROR] ' + e.message, 0, 0);
+      }
+    },
+    renderCall(args, theme) {
+      return new Text(theme.fg("toolTitle", "henyo_fetch ") + theme.fg("muted", `"${args.url}"`), 0, 0);
+    },
+    renderResult(result, { expanded, isPartial }, theme, context) {
+      // Show processing state for partial results
+      if (isPartial) {
+        return new Text(theme.fg("muted", "Processing..."), 0, 0);
+      }
+
+      const details = (result.details as any) || {};
+      const ui: FetchResultUI = {
+        url: details.url ?? context?.args?.url ?? '',
+        title: details.title ?? '',
+        source: details.source ?? 'unknown',
+        sizeLabel: details.sizeLabel,
+        contentLengthKB: details.contentLengthKB,
+        truncated: details.truncated,
+        oversized: details.oversized,
+        cached: details.cached,
+        cacheFilePath: details.cacheFilePath,
+        error: undefined,
+        errorCategory: undefined,
+        content: result.content?.[0]?.type === 'text' ? result.content[0].text : '',
+      };
+
+      // Check for error in the result
+      const err = (result as any).error;
+      if (err || details.errorCategory) {
+        ui.error = err?.message || err || details.error;
+        ui.errorCategory = details.errorCategory;
+        const header = buildErrorFetchHeader(ui, theme);
+        if (expanded) {
+          return new Text(`${header}\n\n(${theme.fg("muted", "press " + keyHint("app.tools.expand", "to collapse"))})`, 0, 0);
+        }
+        return new Text(`${header}\n(${theme.fg("muted", "press " + keyHint("app.tools.expand", "to expand"))})`, 0, 0);
+      }
+
+      if (expanded) {
+        const expandedText = buildExpandedFetchContent(ui, theme);
+        if (expandedText) {
+          return new Text(`${expandedText}\n\n(${theme.fg("muted", "press " + keyHint("app.tools.expand", "to collapse"))})`, 0, 0);
+        }
+      }
+
+      const header = buildCollapsedFetchHeader(ui, theme);
+      return new Text(`${header}\n(${theme.fg("muted", "press " + keyHint("app.tools.expand", "to expand"))})`, 0, 0);
     },
   });
 }

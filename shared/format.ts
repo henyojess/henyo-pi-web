@@ -217,9 +217,9 @@ export function formatResults(results: SearchResult[]): string {
 
   return results.map((r, i) => {
     let line = `${i + 1}. ${r.title}`;
+    if (r.source) line += `  [${r.source}]`;
     line += `\n   URL: ${r.url}`;
     if (r.snippet) line += `\n   ${r.snippet.substring(0, 200)}`;
-    if (r.source) line += `\n   Source: ${r.source}`;
     if (r.domain) line += `\n   Domain: ${r.domain}`;
     return line;
   }).join('\n\n');

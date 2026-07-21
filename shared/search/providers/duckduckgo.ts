@@ -105,6 +105,7 @@ export async function searchDuckDuckGo(query: string, _config?: ProviderConfig, 
           url: actualUrl || redirectUrl || '',
           snippet,
           domain: extractDomain(actualUrl || redirectUrl || ''),
+          source: 'duckduckgo',
         });
       }
     }
@@ -119,6 +120,7 @@ export async function searchDuckDuckGo(query: string, _config?: ProviderConfig, 
           url: '—',
           snippet: text,
           domain: undefined,
+          source: 'duckduckgo',
         });
       }
     }
