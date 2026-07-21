@@ -18,6 +18,36 @@ function getCacheDir(subdir: string): string {
   return `${home}/.pi/tools-cache/${subdir}`;
 }
 
+/** Format byte count to human-readable size label. */
+function formatSize(bytes: number): { contentLengthKB: number; sizeLabel: string } {
+  const kb = bytes / 1024;
+  if (kb < 1024) {
+    return { contentLengthKB: Math.round(kb * 10) / 10, sizeLabel: `${Math.round(kb * 10) / 10} KB` };
+  }
+  const mb = kb / 1024;
+  return { contentLengthKB: Math.round(mb * 100) / 100, sizeLabel: `${Math.round(mb * 100) / 100} MB` };
+}
+
+/** Create a FetchResult with size metadata pre-computed. */
+function makeResult(
+  base: Pick<FetchResult, 'resolvedUrl' | 'source' | 'truncated'>,
+  text: string,
+  title: string,
+  contentLength?: number,
+  extra?: Partial<FetchResult>,
+): FetchResult {
+  const sizeInfo = contentLength !== undefined ? formatSize(contentLength) : undefined;
+  return {
+    text,
+    resolvedUrl: base.resolvedUrl,
+    title,
+    source: base.source,
+    truncated: base.truncated,
+    ...(sizeInfo ? { contentLengthKB: sizeInfo.contentLengthKB, sizeLabel: sizeInfo.sizeLabel } : {}),
+    ...extra,
+  };
+}
+
 export interface FetchPageOptions {
   url: string;
   timeout: number;
@@ -34,6 +64,8 @@ export interface FetchResult {
   title: string;
   source: string;
   truncated: boolean;
+  contentLengthKB?: number;
+  sizeLabel?: string;
   cacheKey?: string;
   cacheFilePath?: string;
   contentLength?: number;
@@ -96,12 +128,15 @@ export async function fetchPage(options: FetchPageOptions): Promise<FetchResult>
   // Check max response size (Content-Length header as early check)
   const contentLengthHeader = res.headers.get('Content-Length');
   if (contentLengthHeader && parseInt(contentLengthHeader, 10) > maxResponseSize) {
+    const sizeInfo = formatSize(parseInt(contentLengthHeader, 10));
     const result: FetchResult = {
       text: `Response exceeded max-response-size limit of ${maxResponseSize} bytes. Consider reducing content-threshold or using noCache to get a fresh fetch.`,
       resolvedUrl,
       title: '',
       source: 'size-exceeded',
       truncated: false,
+      contentLengthKB: sizeInfo.contentLengthKB,
+      sizeLabel: sizeInfo.sizeLabel,
     };
     if (!noCache) cache.put(cacheKey, result);
     return result;
@@ -134,12 +169,15 @@ export async function fetchPage(options: FetchPageOptions): Promise<FetchResult>
       text = decoder.decode(textBytes);
     } catch (e) {
       if (e instanceof Error && e.message.includes('max-response-size')) {
+        const sizeInfo = formatSize(totalSize);
         const result: FetchResult = {
           text: e.message,
           resolvedUrl,
           title: '',
           source: 'size-exceeded',
           truncated: false,
+          contentLengthKB: sizeInfo.contentLengthKB,
+          sizeLabel: sizeInfo.sizeLabel,
         };
         if (!noCache) cache.put(cacheKey, result);
         return result;
@@ -162,13 +200,12 @@ export async function fetchPage(options: FetchPageOptions): Promise<FetchResult>
   if (contentType.includes('application/json')) {
     try {
       const jsonStr = JSON.stringify(JSON.parse(text), null, 2);
-      const result: FetchResult = {
-        text: jsonStr,
-        resolvedUrl,
-        title: '',
-        source: 'json',
-        truncated: false,
-      };
+      const result: FetchResult = makeResult(
+        { resolvedUrl, source: 'json', truncated: false },
+        jsonStr,
+        '',
+        text.length,
+      );
       if (!noCache) cache.put(cacheKey, result);
       return result;
     } catch (e) {
@@ -178,13 +215,12 @@ export async function fetchPage(options: FetchPageOptions): Promise<FetchResult>
   }
 
   if (contentType.includes('text/plain')) {
-    const result: FetchResult = {
+    const result: FetchResult = makeResult(
+      { resolvedUrl, source: 'text', truncated: false },
       text,
-      resolvedUrl,
-      title: '',
-      source: 'text',
-      truncated: false,
-    };
+      '',
+      text.length,
+    );
     if (!noCache) cache.put(cacheKey, result);
     return result;
   }
@@ -236,13 +272,12 @@ export async function fetchPage(options: FetchPageOptions): Promise<FetchResult>
         source = 'binary';
       }
 
-      const result: FetchResult = {
-        text: message,
-        resolvedUrl,
-        title: '',
-        source,
-        truncated: false,
-      };
+      const result: FetchResult = makeResult(
+        { resolvedUrl, source, truncated: false },
+        message,
+        '',
+        text.length,
+      );
       if (!noCache) cache.put(cacheKey, result);
       return result;
     }
@@ -266,12 +301,15 @@ export async function fetchPage(options: FetchPageOptions): Promise<FetchResult>
       getCacheDir('henyo_fetch'),
       cacheKey,
     );
+    const sizeInfo = formatSize(contentLength);
     const fetchResult: FetchResult = {
       text: truncatedResult.bodyText,
       resolvedUrl,
       title: truncatedResult.title || '',
       source: extractionResult.source || 'defuddle',
       truncated: truncatedResult.truncated,
+      contentLengthKB: sizeInfo.contentLengthKB,
+      sizeLabel: sizeInfo.sizeLabel,
       cacheKey: cacheKey,
       cacheFilePath: cacheFilePath,
       contentLength: contentLength,
@@ -286,12 +324,15 @@ export async function fetchPage(options: FetchPageOptions): Promise<FetchResult>
     return fetchResult;
   }
 
+  const sizeInfo = formatSize(contentLength);
   const fetchResult: FetchResult = {
     text: truncatedResult.bodyText,
     resolvedUrl,
     title: truncatedResult.title || '',
     source: extractionResult.source || 'defuddle',
     truncated: truncatedResult.truncated,
+    contentLengthKB: sizeInfo.contentLengthKB,
+    sizeLabel: sizeInfo.sizeLabel,
   };
 
   // Cache

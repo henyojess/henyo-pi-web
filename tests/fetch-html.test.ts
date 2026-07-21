@@ -98,7 +98,7 @@ describe('extractHtmlContent — Defuddle extraction', () => {
   it('uses Jina when Defuddle throws an error', async () => {
     mockGithub.isGitHubUrl.mockReturnValue(false);
     mockExtract.extractWithDefuddle.mockRejectedValue(new Error('defuddle parse error'));
-    mockExtract.fetchWithJina.mockResolvedValue({ title: 'Jina Extracted', bodyText: 'Content from Jina Reader.' });
+    mockExtract.fetchWithJina.mockResolvedValue({ title: 'Jina Extracted', bodyText: 'This is content extracted by Jina Reader from the HTML page. It has sufficient length to pass the quality check and be considered a valid extraction result by the pipeline.' });
 
     const updates: { content: Array<{ type: string; text: string }> }[] = [];
     const result = await extractHtmlContent(mockHtml, 'https://example.com', {
@@ -107,7 +107,7 @@ describe('extractHtmlContent — Defuddle extraction', () => {
     });
 
     expect(result.source).toBe('jina');
-    expect(result.bodyText).toBe('Content from Jina Reader.');
+    expect(result.bodyText).toContain('content extracted by Jina Reader');
     // Defuddle error + trying Jina
     expect(updates).toHaveLength(2);
     expect(updates[0].content[0].text).toContain('Defuddle error');
@@ -121,7 +121,7 @@ describe('extractHtmlContent — Defuddle extraction', () => {
       title: 'https://example.com', // bad title triggers isDefuddleFailure
       author: '', description: '', date: '', lang: '',
     });
-    mockExtract.fetchWithJina.mockResolvedValue({ title: 'Jina Title', bodyText: 'Content from Jina.' });
+    mockExtract.fetchWithJina.mockResolvedValue({ title: 'Jina Title', bodyText: 'This is content extracted by Jina Reader from the HTML page. It has sufficient length to pass the quality check and be considered a valid extraction result by the pipeline.' });
 
     const updates: { content: Array<{ type: string; text: string }> }[] = [];
     const result = await extractHtmlContent(mockHtml, 'https://example.com', {
@@ -171,15 +171,16 @@ describe('extractHtmlContent — Defuddle extraction', () => {
   });
 });
 
-describe('extractHtmlContent — protected/JS-heavy pages', () => {
+describe('extractHtmlContent — JS-heavy pages (Defuddle first)', () => {
   beforeEach(() => {
     vi.clearAllMocks();
   });
 
-  it('uses Jina directly on protected/JS-heavy pages', async () => {
+  it('tries Defuddle first on JS-heavy pages, then Jina', async () => {
     mockGithub.isGitHubUrl.mockReturnValue(false);
     const protectedHtml = '<html><body><script src="a.js"></script><script src="a.js"></script><script src="a.js"></script><script src="a.js"></script><script src="a.js"></script><script src="a.js"></script><div id="__nuxt"></div></body></html>';
-    mockExtract.fetchWithJina.mockResolvedValue({ title: 'Protected Page', bodyText: 'Content from Jina.' });
+    mockExtract.extractWithDefuddle.mockRejectedValue(new Error('defuddle error'));
+    mockExtract.fetchWithJina.mockResolvedValue({ title: 'Protected Page', bodyText: 'This is content extracted by Jina Reader from the HTML page. It has sufficient length to pass the quality check and be considered a valid extraction result by the pipeline.' });
 
     const updates: { content: Array<{ type: string; text: string }> }[] = [];
     const result = await extractHtmlContent(protectedHtml, 'https://example.com', {
@@ -188,29 +189,16 @@ describe('extractHtmlContent — protected/JS-heavy pages', () => {
     });
 
     expect(result.source).toBe('jina');
-    expect(updates).toHaveLength(1);
-    expect(updates[0].content[0].text).toContain('Detected bot protection');
-  });
-
-  it('returns raw on protected page when Jina is disabled', async () => {
-    mockGithub.isGitHubUrl.mockReturnValue(false);
-    const protectedHtml = '<html><body><script src="a.js"></script><script src="a.js"></script><script src="a.js"></script><script src="a.js"></script><script src="a.js"></script><script src="a.js"></script><div id="__nuxt"></div></body></html>';
-
-    const updates: { content: Array<{ type: string; text: string }> }[] = [];
-    const result = await extractHtmlContent(protectedHtml, 'https://example.com', {
-      jinaEnabled: false,
-      onUpdate: (u) => updates.push(u),
-    });
-
-    expect(result.source).toBe('raw');
+    // Defuddle error + trying Jina
     expect(updates).toHaveLength(2);
-    expect(updates[0].content[0].text).toContain('Detected bot protection');
-    expect(updates[1].content[0].text).toContain('Jina is disabled');
+    expect(updates[0].content[0].text).toContain('Defuddle error');
+    expect(updates[1].content[0].text).toContain('trying Jina Reader');
   });
 
-  it('falls back to raw when Jina fails on protected page', async () => {
+  it('returns raw on JS-heavy page when both Defuddle and Jina fail', async () => {
     mockGithub.isGitHubUrl.mockReturnValue(false);
     const protectedHtml = '<html><body><script src="a.js"></script><script src="a.js"></script><script src="a.js"></script><script src="a.js"></script><script src="a.js"></script><script src="a.js"></script><div id="__nuxt"></div></body></html>';
+    mockExtract.extractWithDefuddle.mockRejectedValue(new Error('defuddle error'));
     mockExtract.fetchWithJina.mockRejectedValue(new Error('Jina timeout'));
 
     const updates: { content: Array<{ type: string; text: string }> }[] = [];
@@ -220,9 +208,29 @@ describe('extractHtmlContent — protected/JS-heavy pages', () => {
     });
 
     expect(result.source).toBe('raw');
+    // Defuddle error + trying Jina + Jina error
+    expect(updates).toHaveLength(3);
+    expect(updates[0].content[0].text).toContain('Defuddle error');
+    expect(updates[1].content[0].text).toContain('trying Jina Reader');
+    expect(updates[2].content[0].text).toContain('Jina Reader error');
+  });
+
+  it('returns raw when Defuddle fails and Jina is disabled', async () => {
+    mockGithub.isGitHubUrl.mockReturnValue(false);
+    const protectedHtml = '<html><body><script src="a.js"></script><script src="a.js"></script><script src="a.js"></script><script src="a.js"></script><script src="a.js"></script><script src="a.js"></script><div id="__nuxt"></div></body></html>';
+    mockExtract.extractWithDefuddle.mockRejectedValue(new Error('defuddle error'));
+
+    const updates: { content: Array<{ type: string; text: string }> }[] = [];
+    const result = await extractHtmlContent(protectedHtml, 'https://example.com', {
+      jinaEnabled: false,
+      onUpdate: (u) => updates.push(u),
+    });
+
+    expect(result.source).toBe('raw');
+    // Defuddle error + Jina disabled warning
     expect(updates).toHaveLength(2);
-    expect(updates[0].content[0].text).toContain('Detected bot protection');
-    expect(updates[1].content[0].text).toContain('Jina Reader error');
+    expect(updates[0].content[0].text).toContain('Defuddle error');
+    expect(updates[1].content[0].text).toContain('Jina is disabled');
   });
 });
 

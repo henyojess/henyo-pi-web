@@ -7,3 +7,5 @@ export type { TruncateResult } from './truncate';
 export { fetchWithRetry } from './retry';
 export { fetchPage } from './pipeline';
 export type { FetchPageOptions, FetchResult } from './pipeline';
+export { buildCollapsedFetchHeader, buildExpandedFetchContent, buildErrorFetchHeader } from './ui';
+export type { FetchResultUI } from './ui';
