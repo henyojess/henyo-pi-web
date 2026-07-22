@@ -12,9 +12,6 @@ import type { ExtractionResult } from './html-extraction';
 
 function getCacheDir(subdir: string): string {
   const home = process.env.HOME || process.env.USERPROFILE;
-  if (!process.env.HOME && process.env.USERPROFILE) {
-    console.warn('[henyo-fetch] HOME is undefined, using USERPROFILE for cache path');
-  }
   return `${home}/.pi/tools-cache/${subdir}`;
 }
 
@@ -194,11 +191,6 @@ export async function fetchPage(options: FetchPageOptions): Promise<FetchResult>
     text = await res.text();
   }
 
-  // Cloudflare warning
-  if (isCloudflareChallenge(text)) {
-    onUpdate?.({ content: [{ type: 'text', text: 'Warning: Site is behind Cloudflare protection.' }] });
-  }
-
   // ─── Content-type aware handling ───────────────────────────────────────
   const contentType = res.headers.get('Content-Type') || '';
 
@@ -214,7 +206,6 @@ export async function fetchPage(options: FetchPageOptions): Promise<FetchResult>
       if (!noCache) cache.put(cacheKey, result);
       return result;
     } catch (e) {
-      console.warn(`[henyo-fetch] JSON parse error for ${url}: ${e instanceof Error ? e.message : String(e)}`);
       // Fall through to treat as raw text
     }
   }

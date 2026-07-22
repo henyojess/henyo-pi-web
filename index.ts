@@ -18,6 +18,7 @@ import type { SearchResult } from "./shared/search/providers";
 import { fetchPage } from "./shared/fetch/pipeline";
 import { formatResults, normalizeUrl, diversifyByDomain, rankResults } from "./shared/format";
 import { buildCollapsedFetchHeader, buildExpandedFetchContent, buildErrorFetchHeader, type FetchResultUI } from "./shared/fetch/ui";
+
 import type { FetchErrorCategory } from "./shared/fetch/pipeline";
 
 function getCacheDir(subdir: string): string {
@@ -94,9 +95,6 @@ export default function (pi: ExtensionAPI) {
       if (providers.length === 0) {
         throw new Error(`No providers configured for context: ${contextName}`);
       }
-
-      // Single progress update at start
-      onUpdate?.({ content: [{ type: "text", text: `Searching ${contextName} context (${providers.length} providers)...` }] });
 
       const cache = createCache<SearchResult[]>(
         getCacheDir('henyo_search'),
@@ -263,8 +261,8 @@ export default function (pi: ExtensionAPI) {
       const { url, timeout = 15000, noCache = false, headers } = params;
       log('execute: toolCallId=' + toolCallId + ' url=' + url);
 
-      onUpdate?.({ content: [{ type: "text", text: `Fetching ${url}...` }] });
-      log('execute: onUpdate called');
+      // 100ms delay so TUI can properly update
+      await new Promise(r => setTimeout(r, 100));
 
       try {
         const result = await fetchPage({
@@ -273,11 +271,11 @@ export default function (pi: ExtensionAPI) {
           noCache,
           config: config["henyo-fetch"],
           signal,
-          onUpdate,
+          onUpdate: undefined,
           headers,
         });
 
-        // Handle oversized content — return metadata only, let agent decide
+        // Handle oversized content — return metadata only
         if (result.oversized) {
           return {
             content: [{
@@ -308,9 +306,9 @@ export default function (pi: ExtensionAPI) {
             truncated: result.truncated,
             contentLengthKB: result.contentLengthKB,
             sizeLabel: result.sizeLabel,
+            oversized: result.oversized,
             cached: result.cached,
             cacheFilePath: result.cacheFilePath,
-            contentLength: result.contentLength,
           },
         };
       } catch (err: any) {
@@ -333,19 +331,14 @@ export default function (pi: ExtensionAPI) {
         };
       }
     renderCall(args, theme) {
-      return new Text(theme.fg("toolTitle", "henyo_fetch ") + theme.fg("muted", `"${args.url}"`), 0, 0);
+      return new Text(theme.fg("toolTitle", "henyo_fetch ") + `"${args.url}"`, 0, 0);
     },
     renderResult(result, { expanded, isPartial }, theme, context) {
-      log('renderResult: isPartial=' + isPartial + ' expanded=' + expanded + ' contextToolCallId=' + (context as any)?.toolCallId + ' contextArgs=' + JSON.stringify((context as any)?.args));
-      // Show processing state for partial results
       if (isPartial) {
-        log('renderResult: returning processing');
         return new Text(theme.fg("muted", "Processing..."), 0, 0);
       }
 
-      log('renderResult: building UI');
       const details = (result.details as any) || {};
-      log('renderResult: details=' + JSON.stringify(details));
       const ui: FetchResultUI = {
         url: details.url ?? context?.args?.url ?? '',
         title: details.title ?? '',
@@ -356,44 +349,59 @@ export default function (pi: ExtensionAPI) {
         oversized: details.oversized,
         cached: details.cached,
         cacheFilePath: details.cacheFilePath,
-        error: undefined,
-        errorCategory: undefined,
+        error: (result as any).error,
+        errorCategory: details.errorCategory,
         content: result.content?.[0]?.type === 'text' ? result.content[0].text : '',
       };
-      log('renderResult: ui=' + JSON.stringify({ url: ui.url, title: ui.title, source: ui.source, truncated: ui.truncated, oversized: ui.oversized }));
 
-      // Check for error in the result
-      const err = (result as any).error;
-      if (err || details.errorCategory) {
-        log('renderResult: error path');
-        ui.error = err?.message || err || details.error;
-        ui.errorCategory = details.errorCategory;
+      // Check for error
+      if (ui.error || details.errorCategory) {
         const header = buildErrorFetchHeader(ui, theme);
-        const text = new Text(`${header}\n(${theme.fg("muted", "press " + keyHint("app.tools.expand", "to expand"))})`, 0, 0);
-        log('renderResult: returning error=' + text.text.substring(0, 80));
-        return text;
+        if (expanded) {
+          return new Text(`${header}\n\n(${theme.fg("muted", "press " + keyHint("app.tools.expand", "to collapse"))})`, 0, 0);
+        }
+        return new Text(`${header}\n(${theme.fg("muted", "press " + keyHint("app.tools.expand", "to expand"))})`, 0, 0);
       }
 
       if (expanded) {
-        log('renderResult: expanded path');
         const expandedText = buildExpandedFetchContent(ui, theme, keyHint);
         if (expandedText) {
-          const text = new Text(expandedText, 0, 0);
-          log('renderResult: returning expanded=' + text.text.substring(0, 80));
-          return text;
+          return new Text(expandedText, 0, 0);
         }
       }
 
-      log('renderResult: collapsed path');
-      try {
-        const header = buildCollapsedFetchHeader(ui, theme);
-        const text = new Text(`${header}\n(${theme.fg("muted", "press " + keyHint("app.tools.expand", "to expand"))})`, 0, 0);
-        log('renderResult: returning collapsed=' + text.text.substring(0, 80));
-        return text;
-      } catch (e: any) {
-        log('renderResult: ERROR ' + e.message);
-        return new Text('[ERROR] ' + e.message, 0, 0);
+      const header = buildCollapsedFetchHeader(ui, theme);
+      return new Text(`${header}\n(${theme.fg("muted", "press " + keyHint("app.tools.expand", "to expand"))})`, 0, 0);
+    },
+  });
+
+  // --- Test tool for debugging TUI rendering ---
+  pi.registerTool({
+    name: "test_fetch",
+    label: "Test Fetch",
+    description: "Simple test tool to debug TUI rendering",
+    promptSnippet: "Simple test tool",
+    parameters: Type.Object({
+      delay: Type.Optional(Type.Integer({ default: 3 })),
+    }),
+    async execute(_toolCallId, params, signal, onUpdate, _ctx) {
+      const delay = params.delay ?? 3;
+      // Send partial result to trigger isPartial: true
+      onUpdate?.({ content: [{ type: "text", text: "" }] });
+      await new Promise(resolve => setTimeout(resolve, delay * 1000));
+      return {
+        content: [{ type: "text", text: "fetch result simulation" }],
+        details: { source: "test" },
+      };
+    },
+    renderCall(args, theme) {
+      return new Text(theme.fg("toolTitle", "test_fetch") + ` delay=${args.delay ?? 3}s`, 0, 0);
+    },
+    renderResult(result, { expanded, isPartial }, theme, _context) {
+      if (isPartial) {
+        return new Text(theme.fg("muted", "Processing..."), 0, 0);
       }
+      return new Text(theme.fg("success", "fetch result simulation"), 0, 0);
     },
     renderCall(args, theme) {
       return new Text(theme.fg("toolTitle", "henyo_fetch ") + theme.fg("muted", `"${args.url}"`), 0, 0);

@@ -67,11 +67,8 @@ describe('extractHtmlContent — GitHub URL', () => {
 
     expect(result.source).toBe('raw');
     expect(result.bodyText).toContain('Content here');
-    // Defuddle error + trying Jina + Jina error
-    expect(updates).toHaveLength(3);
-    expect(updates[0].content[0].text).toContain('Defuddle error');
-    expect(updates[1].content[0].text).toContain('trying Jina Reader');
-    expect(updates[2].content[0].text).toContain('Jina Reader error');
+    // No intermediate messages (all suppressed to avoid TUI clutter)
+    expect(updates).toHaveLength(0);
   });
 });
 
@@ -108,10 +105,8 @@ describe('extractHtmlContent — Defuddle extraction', () => {
 
     expect(result.source).toBe('jina');
     expect(result.bodyText).toContain('content extracted by Jina Reader');
-    // Defuddle error + trying Jina
-    expect(updates).toHaveLength(2);
-    expect(updates[0].content[0].text).toContain('Defuddle error');
-    expect(updates[1].content[0].text).toContain('trying Jina Reader');
+    // No intermediate messages (suppressed to avoid TUI clutter)
+    expect(updates).toHaveLength(0);
   });
 
   it('uses Jina when Defuddle produces low-quality content', async () => {
@@ -130,8 +125,8 @@ describe('extractHtmlContent — Defuddle extraction', () => {
     });
 
     expect(result.source).toBe('jina');
-    expect(updates).toHaveLength(1);
-    expect(updates[0].content[0].text).toContain('low-quality content');
+    // No intermediate updates — Jina fallback is silent
+    expect(updates).toHaveLength(0);
   });
 
   it('returns raw when Defuddle fails and Jina is disabled', async () => {
@@ -145,10 +140,8 @@ describe('extractHtmlContent — Defuddle extraction', () => {
     });
 
     expect(result.source).toBe('raw');
-    // Defuddle error + Jina disabled warning
-    expect(updates).toHaveLength(2);
-    expect(updates[0].content[0].text).toContain('Defuddle error');
-    expect(updates[1].content[0].text).toContain('Jina is disabled');
+    // No intermediate messages (suppressed to avoid TUI clutter)
+    expect(updates).toHaveLength(0);
   });
 
   it('returns raw when all extraction fails', async () => {
@@ -163,11 +156,8 @@ describe('extractHtmlContent — Defuddle extraction', () => {
     });
 
     expect(result.source).toBe('raw');
-    // Defuddle error + trying Jina + Jina error
-    expect(updates).toHaveLength(3);
-    expect(updates[0].content[0].text).toContain('Defuddle error');
-    expect(updates[1].content[0].text).toContain('trying Jina Reader');
-    expect(updates[2].content[0].text).toContain('Jina Reader error');
+    // No intermediate messages (all suppressed to avoid TUI clutter)
+    expect(updates).toHaveLength(0);
   });
 });
 
@@ -189,10 +179,8 @@ describe('extractHtmlContent — JS-heavy pages (Defuddle first)', () => {
     });
 
     expect(result.source).toBe('jina');
-    // Defuddle error + trying Jina
-    expect(updates).toHaveLength(2);
-    expect(updates[0].content[0].text).toContain('Defuddle error');
-    expect(updates[1].content[0].text).toContain('trying Jina Reader');
+    // No intermediate messages (suppressed to avoid TUI clutter)
+    expect(updates).toHaveLength(0);
   });
 
   it('returns raw on JS-heavy page when both Defuddle and Jina fail', async () => {
@@ -208,11 +196,8 @@ describe('extractHtmlContent — JS-heavy pages (Defuddle first)', () => {
     });
 
     expect(result.source).toBe('raw');
-    // Defuddle error + trying Jina + Jina error
-    expect(updates).toHaveLength(3);
-    expect(updates[0].content[0].text).toContain('Defuddle error');
-    expect(updates[1].content[0].text).toContain('trying Jina Reader');
-    expect(updates[2].content[0].text).toContain('Jina Reader error');
+    // No intermediate messages (all suppressed to avoid TUI clutter)
+    expect(updates).toHaveLength(0);
   });
 
   it('returns raw when Defuddle fails and Jina is disabled', async () => {
@@ -227,10 +212,8 @@ describe('extractHtmlContent — JS-heavy pages (Defuddle first)', () => {
     });
 
     expect(result.source).toBe('raw');
-    // Defuddle error + Jina disabled warning
-    expect(updates).toHaveLength(2);
-    expect(updates[0].content[0].text).toContain('Defuddle error');
-    expect(updates[1].content[0].text).toContain('Jina is disabled');
+    // No intermediate messages (suppressed to avoid TUI clutter)
+    expect(updates).toHaveLength(0);
   });
 });
 

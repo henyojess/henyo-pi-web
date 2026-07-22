@@ -174,9 +174,9 @@ describe('fetchPage', () => {
     (fetchWithJina as any).mockResolvedValue({ title: 'Recovered', bodyText: 'Content recovered by Jina after Defuddle failed on the protected page.' });
 
     const result = await fetchPage({ url: 'https://example.com', timeout: 10000, noCache: true, config, onUpdate: (u) => updates.push(u) });
-    // Cloudflare warning + Defuddle error + Jina message = 3 updates
-    expect(updates).toHaveLength(3);
-    expect(updates[0].content[0].text).toBe('Warning: Site is behind Cloudflare protection.');
+    // Cloudflare warning suppressed — no intermediate messages
+    expect(updates).toHaveLength(0);
+    expect(result.source).toBe('jina');
   });
 
   it('handles Cloudflare warning with successful Defuddle (no Jina needed)', async () => {
@@ -192,9 +192,8 @@ describe('fetchPage', () => {
       author: '', description: '', date: '', lang: '',
     });
     const result = await fetchPage({ url: 'https://example.com', timeout: 10000, noCache: true, config, onUpdate: (u) => updates.push(u) });
-    // Only Cloudflare warning, no Defuddle error or Jina message
-    expect(updates).toHaveLength(1);
-    expect(updates[0].content[0].text).toBe('Warning: Site is behind Cloudflare protection.');
+    // Cloudflare warning suppressed — no intermediate messages
+    expect(updates).toHaveLength(0);
     expect(result.source).toBe('defuddle');
   });
 

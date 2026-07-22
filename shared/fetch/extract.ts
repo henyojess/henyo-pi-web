@@ -12,16 +12,28 @@ export interface ExtractionResult {
 }
 
 export async function extractWithDefuddle(html: string, url: string): Promise<ExtractionResult> {
-  const dom = new JSDOM(html, { url, runScripts: 'outside-only' });
-  const result = await Defuddle(dom.window.document, url, { markdown: true });
-  return {
-    bodyText: result.content?.trim() || '',
-    title: result.title?.trim() || '',
-    author: result.author?.trim() || '',
-    description: result.description?.trim() || '',
-    date: result.date?.trim() || '',
-    lang: result.lang || '',
-  };
+  // Suppress Defuddle's console.error/console.log during extraction
+  const savedError = console.error;
+  const savedLog = console.log;
+  console.error = () => {};
+  console.log = () => {};
+  try {
+    const dom = new JSDOM(html, { url, runScripts: 'outside-only' });
+    const result = await Defuddle(dom.window.document, url, { markdown: true });
+    return {
+      bodyText: result.content?.trim() || '',
+      title: result.title?.trim() || '',
+      author: result.author?.trim() || '',
+      description: result.description?.trim() || '',
+      date: result.date?.trim() || '',
+      lang: result.lang || '',
+    };
+  } catch {
+    throw new Error('Defuddle extraction failed');
+  } finally {
+    console.error = savedError;
+    console.log = savedLog;
+  }
 }
 
 export async function fetchWithJina(

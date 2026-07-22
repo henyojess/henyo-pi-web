@@ -50,6 +50,7 @@ export async function extractHtmlContent(
 
   // Step 2: Try Defuddle first (always, regardless of JS-heavy detection)
   if (!result) {
+    let defuddleFailed = false;
     try {
       const extraction = await extractWithDefuddle(html, url);
       result = {
@@ -58,27 +59,24 @@ export async function extractHtmlContent(
         source: 'defuddle',
       };
     } catch (err) {
-      onUpdate?.({ content: [{ type: 'text', text: `Defuddle error: ${err.message || err}` }] });
+      defuddleFailed = true;
     }
 
     // Check if Defuddle produced acceptable results
     if (!result || isDefuddleFailure({ ...result, author: '', description: '', date: '', lang: '' })) {
       if (!jinaEnabled) {
-        onUpdate?.({ content: [{ type: 'text', text: 'Warning: Defuddle failed and Jina is disabled.' }] });
         result = { bodyText: html, title: '', source: 'raw' };
       } else {
-        onUpdate?.({ content: [{ type: 'text', text: '[Defuddle returned low-quality content, trying Jina Reader...]' }] });
         try {
           const jinaResult = await fetchWithJina(url, jinaTimeout, headers);
           if (isJinaContentAcceptable(jinaResult.bodyText)) {
             result = { bodyText: jinaResult.bodyText, title: jinaResult.title, source: 'jina' };
           } else {
             // Jina content is poor quality, fall back to raw HTML
-            onUpdate?.({ content: [{ type: 'text', text: '[Jina returned low-quality content, using raw HTML...]' }] });
             result = { bodyText: html, title: jinaResult.title, source: 'raw' };
           }
         } catch (err) {
-          onUpdate?.({ content: [{ type: 'text', text: `Jina Reader error: ${err.message || err}` }] });
+          // Jina failed — fall back to raw, no message to avoid TUI clutter
           result = { bodyText: html, title: '', source: 'raw' };
         }
       }
