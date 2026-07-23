@@ -152,6 +152,44 @@ describe('fetchPage', () => {
     expect(result.text).toContain('42');
   });
 
+  it('returns oversized:true when JSON exceeds contentThreshold', async () => {
+    const largeJson = JSON.stringify({ data: 'x'.repeat(150000) }, null, 2);
+    mockFetch(async () => new Response(largeJson, {
+      status: 200, headers: { 'Content-Type': 'application/json' },
+    }));
+    const result = await fetchPage({
+      url: 'https://example.com/large-json',
+      timeout: 10000,
+      noCache: true,
+      config: { ...config, 'content-threshold': 32000 },
+    });
+    expect(result.oversized).toBe(true);
+    expect(result.source).toBe('json');
+    expect(result.cacheKey).toBeDefined();
+    expect(result.cacheFilePath).toBeDefined();
+    expect(result.cacheFilePath).toContain('.pi/tools-cache/henyo_fetch/');
+    expect(result.errorCategory).toBe('size-exceeded');
+    expect(result.contentLengthKB).toBeDefined();
+    expect(result.sizeLabel).toBeDefined();
+  });
+
+  it('returns normal JSON when under contentThreshold', async () => {
+    const smallJson = JSON.stringify({ key: 'value', items: Array(10).fill('test') }, null, 2);
+    mockFetch(async () => new Response(smallJson, {
+      status: 200, headers: { 'Content-Type': 'application/json' },
+    }));
+    const result = await fetchPage({
+      url: 'https://example.com/small-json',
+      timeout: 10000,
+      noCache: true,
+      config: { ...config, 'content-threshold': 32000 },
+    });
+    expect(result.oversized).toBeUndefined();
+    expect(result.source).toBe('json');
+    expect(result.text).toContain('"key"');
+    expect(result.text).toContain('"value"');
+  });
+
   it('handles text/plain content type response', async () => {
     mockFetch(async () => new Response('Plain text content here', {
       status: 200, headers: { 'Content-Type': 'text/plain' },

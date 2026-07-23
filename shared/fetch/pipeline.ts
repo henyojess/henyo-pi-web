@@ -197,11 +197,40 @@ export async function fetchPage(options: FetchPageOptions): Promise<FetchResult>
   if (contentType.includes('application/json')) {
     try {
       const jsonStr = JSON.stringify(JSON.parse(text), null, 2);
+      const jsonLength = jsonStr.length;
+
+      // Check if JSON content exceeds threshold — same as HTML oversized handling
+      if (jsonLength > contentThreshold) {
+        const cacheFilePath = keyToPath(
+          getCacheDir('henyo_fetch'),
+          cacheKey,
+        );
+        const sizeInfo = formatSize(jsonLength);
+        const fetchResult: FetchResult = {
+          text: `JSON response exceeded content-threshold limit of ${contentThreshold} characters.`,
+          resolvedUrl,
+          title: '',
+          source: 'json',
+          truncated: false,
+          contentLengthKB: sizeInfo.contentLengthKB,
+          sizeLabel: sizeInfo.sizeLabel,
+          cacheKey: cacheKey,
+          cacheFilePath: cacheFilePath,
+          contentLength: jsonLength,
+          oversized: true,
+          errorCategory: 'size-exceeded',
+        };
+        if (!noCache) {
+          cache.put(cacheKey, fetchResult);
+        }
+        return fetchResult;
+      }
+
       const result: FetchResult = makeResult(
         { resolvedUrl, source: 'json', truncated: false },
         jsonStr,
         '',
-        text.length,
+        jsonLength,
       );
       if (!noCache) cache.put(cacheKey, result);
       return result;
