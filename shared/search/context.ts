@@ -1,4 +1,5 @@
-import { PROVIDER_MAP, SearchResult } from './providers';
+import { PROVIDER_MAP } from './providers';
+import type { SearchResult } from './providers';
 import type { ContextConfig } from '../config';
 
 export interface Provider {

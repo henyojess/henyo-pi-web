@@ -74,6 +74,28 @@ describe('fetchPage', () => {
     expect(result2.source).toBe(result1.source);
   });
 
+  it('marks cached results with cached: true flag', async () => {
+    // Clear cache to avoid interference from previous tests
+    const { createCache } = await import('../shared/cache');
+    const testCache = createCache(
+      `${process.env.HOME}/.pi/tools-cache/henyo_fetch`,
+      3600,
+      100,
+    );
+    testCache.clear();
+
+    mockHtmlFetch();
+    (extractWithDefuddle as any).mockResolvedValue({
+      bodyText: 'Cached content with enough text to pass quality checks for the extraction pipeline.',
+      title: 'Cached Title',
+      author: '', description: '', date: '', lang: '',
+    });
+    const result1 = await fetchPage({ url: 'https://example.com', timeout: 10000, noCache: false, config });
+    const result2 = await fetchPage({ url: 'https://example.com', timeout: 10000, noCache: false, config });
+    expect(result1.cached).toBeUndefined(); // first call is not cached
+    expect(result2.cached).toBe(true); // second call is from cache
+  });
+
   it('skips cache with noCache: true', async () => {
     mockHtmlFetch();
     let callCount = 0;
@@ -152,9 +174,9 @@ describe('fetchPage', () => {
     (fetchWithJina as any).mockResolvedValue({ title: 'Recovered', bodyText: 'Content recovered by Jina after Defuddle failed on the protected page.' });
 
     const result = await fetchPage({ url: 'https://example.com', timeout: 10000, noCache: true, config, onUpdate: (u) => updates.push(u) });
-    // Cloudflare warning + Defuddle error + Jina message = 3 updates
-    expect(updates).toHaveLength(3);
-    expect(updates[0].content[0].text).toBe('Warning: Site is behind Cloudflare protection.');
+    // Cloudflare warning suppressed — no intermediate messages
+    expect(updates).toHaveLength(0);
+    expect(result.source).toBe('jina');
   });
 
   it('handles Cloudflare warning with successful Defuddle (no Jina needed)', async () => {
@@ -170,9 +192,8 @@ describe('fetchPage', () => {
       author: '', description: '', date: '', lang: '',
     });
     const result = await fetchPage({ url: 'https://example.com', timeout: 10000, noCache: true, config, onUpdate: (u) => updates.push(u) });
-    // Only Cloudflare warning, no Defuddle error or Jina message
-    expect(updates).toHaveLength(1);
-    expect(updates[0].content[0].text).toBe('Warning: Site is behind Cloudflare protection.');
+    // Cloudflare warning suppressed — no intermediate messages
+    expect(updates).toHaveLength(0);
     expect(result.source).toBe('defuddle');
   });
 

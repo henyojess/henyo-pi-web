@@ -187,7 +187,7 @@ describe('formatResults', () => {
     const results: SearchResult[] = [
       { title: 'Test', url: 'https://example.com', snippet: '', source: 'npm' },
     ];
-    expect(formatResults(results)).toContain('Source: npm');
+    expect(formatResults(results)).toContain('[npm]');
   });
 
   it('handles multiple results', () => {

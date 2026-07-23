@@ -2,6 +2,13 @@ import type { ExtensionAPI, Theme } from "@earendil-works/pi-coding-agent";
 import { keyHint } from "@earendil-works/pi-coding-agent";
 import { Type } from "typebox";
 import { Text } from "@earendil-works/pi-tui";
+import fs from "node:fs";
+import { FetchResultUI, buildErrorFetchHeader, buildExpandedFetchContent, buildCollapsedFetchHeader } from "./shared/fetch/ui.js";
+import type { FetchErrorCategory } from "./shared/fetch/pipeline.js";
+const LOG = "/tmp/henyo-fetch-debug.log";
+function log(...args: any[]) {
+  fs.appendFileSync(LOG, `[${new Date().toISOString()}] ${args.map(a => typeof a === 'object' ? JSON.stringify(a, null, 2) : String(a)).join(' ')}\n`);
+}
 
 import { loadConfig, validateConfig } from "./shared/config";
 import { createCache } from "./shared/cache";
@@ -10,6 +17,9 @@ import { PROVIDER_MAP } from "./shared/search/providers";
 import type { SearchResult } from "./shared/search/providers";
 import { fetchPage } from "./shared/fetch/pipeline";
 import { formatResults, normalizeUrl, diversifyByDomain, rankResults } from "./shared/format";
+import { buildCollapsedFetchHeader, buildExpandedFetchContent, buildErrorFetchHeader, type FetchResultUI } from "./shared/fetch/ui";
+
+import type { FetchErrorCategory } from "./shared/fetch/pipeline";
 
 function getCacheDir(subdir: string): string {
   const home = process.env.HOME || process.env.USERPROFILE;
@@ -85,9 +95,6 @@ export default function (pi: ExtensionAPI) {
       if (providers.length === 0) {
         throw new Error(`No providers configured for context: ${contextName}`);
       }
-
-      // Single progress update at start
-      onUpdate?.({ content: [{ type: "text", text: `Searching ${contextName} context (${providers.length} providers)...` }] });
 
       const cache = createCache<SearchResult[]>(
         getCacheDir('henyo_search'),
@@ -250,10 +257,12 @@ export default function (pi: ExtensionAPI) {
         description: "Custom HTTP headers (e.g., { 'Authorization': 'Bearer token' })",
       })),
     }),
-    async execute(_toolCallId, params, signal, onUpdate, _ctx) {
+    async execute(toolCallId, params, signal, onUpdate, _ctx) {
       const { url, timeout = 15000, noCache = false, headers } = params;
+      log('execute: toolCallId=' + toolCallId + ' url=' + url);
 
-      onUpdate?.({ content: [{ type: "text", text: `Fetching ${url}...` }] });
+      // 100ms delay so TUI can properly update
+      await new Promise(r => setTimeout(r, 100));
 
       try {
         const result = await fetchPage({
@@ -262,17 +271,16 @@ export default function (pi: ExtensionAPI) {
           noCache,
           config: config["henyo-fetch"],
           signal,
-          onUpdate,
+          onUpdate: undefined,
           headers,
         });
 
-        // Handle oversized content — return metadata only, let agent decide
+        // Handle oversized content — return metadata only
         if (result.oversized) {
-          const sizeKB = (result.contentLength! / 1024).toFixed(1);
           return {
             content: [{
               type: "text",
-              text: `[Cached — ${sizeKB} KB]\n\nURL: ${result.resolvedUrl}\nTitle: ${result.title}\nSource: ${result.source}\nCache: ${result.cacheFilePath}]`,
+              text: `[Cached — ${result.sizeLabel || result.contentLengthKB?.toFixed(1) || '?'}]\n\nURL: ${result.resolvedUrl}\nTitle: ${result.title}\nSource: ${result.source}\nCache: ${result.cacheFilePath}]`,
             }],
             details: {
               url: result.resolvedUrl,
@@ -281,7 +289,10 @@ export default function (pi: ExtensionAPI) {
               cached: true,
               cacheFilePath: result.cacheFilePath,
               contentLength: result.contentLength,
-              contentLengthKB: Number(sizeKB),
+              contentLengthKB: result.contentLengthKB,
+              sizeLabel: result.sizeLabel,
+              oversized: true,
+              truncated: result.truncated,
             },
           };
         }
@@ -293,11 +304,151 @@ export default function (pi: ExtensionAPI) {
             title: result.title,
             source: result.source,
             truncated: result.truncated,
+            contentLengthKB: result.contentLengthKB,
+            sizeLabel: result.sizeLabel,
+            oversized: result.oversized,
+            cached: result.cached,
+            cacheFilePath: result.cacheFilePath,
           },
         };
       } catch (err: any) {
-        throw new Error(`Failed to fetch ${url}: ${err.message || err}`);
+        const message = err.message || String(err);
+        const errorCategory: FetchErrorCategory = message.includes('ssrf') ? 'ssrf' :
+          message.includes('invalid URL') ? 'invalid-url' :
+          message.includes('timeout') ? 'timeout' :
+          message.includes('404') ? 'not-found' :
+          message.includes('403') || message.includes('forbidden') ? 'forbidden' :
+          message.includes('500') || message.includes('502') || message.includes('503') ? 'server-error' :
+          message.includes('fetch failed') || message.includes('network') || message.includes('failed after') ? 'network' :
+          'unknown';
+        return {
+          content: [{ type: "text", text: message }],
+          details: {
+            url: params.url,
+            error: message,
+            errorCategory,
+          },
+        };
       }
+    renderCall(args, theme) {
+      return new Text(theme.fg("toolTitle", "henyo_fetch ") + `"${args.url}"`, 0, 0);
+    },
+    renderResult(result, { expanded, isPartial }, theme, context) {
+      if (isPartial) {
+        return new Text(theme.fg("muted", "Processing..."), 0, 0);
+      }
+
+      const details = (result.details as any) || {};
+      const ui: FetchResultUI = {
+        url: details.url ?? context?.args?.url ?? '',
+        title: details.title ?? '',
+        source: details.source ?? 'unknown',
+        sizeLabel: details.sizeLabel,
+        contentLengthKB: details.contentLengthKB,
+        truncated: details.truncated,
+        oversized: details.oversized,
+        cached: details.cached,
+        cacheFilePath: details.cacheFilePath,
+        error: (result as any).error,
+        errorCategory: details.errorCategory,
+        content: result.content?.[0]?.type === 'text' ? result.content[0].text : '',
+      };
+
+      // Check for error
+      if (ui.error || details.errorCategory) {
+        const header = buildErrorFetchHeader(ui, theme);
+        if (expanded) {
+          return new Text(`${header}\n\n(${theme.fg("muted", "press " + keyHint("app.tools.expand", "to collapse"))})`, 0, 0);
+        }
+        return new Text(`${header}\n(${theme.fg("muted", "press " + keyHint("app.tools.expand", "to expand"))})`, 0, 0);
+      }
+
+      if (expanded) {
+        const expandedText = buildExpandedFetchContent(ui, theme, keyHint);
+        if (expandedText) {
+          return new Text(expandedText, 0, 0);
+        }
+      }
+
+      const header = buildCollapsedFetchHeader(ui, theme);
+      return new Text(`${header}\n(${theme.fg("muted", "press " + keyHint("app.tools.expand", "to expand"))})`, 0, 0);
+    },
+  });
+
+  // --- Test tool for debugging TUI rendering ---
+  pi.registerTool({
+    name: "test_fetch",
+    label: "Test Fetch",
+    description: "Simple test tool to debug TUI rendering",
+    promptSnippet: "Simple test tool",
+    parameters: Type.Object({
+      delay: Type.Optional(Type.Integer({ default: 3 })),
+    }),
+    async execute(_toolCallId, params, signal, onUpdate, _ctx) {
+      const delay = params.delay ?? 3;
+      // Send partial result to trigger isPartial: true
+      onUpdate?.({ content: [{ type: "text", text: "" }] });
+      await new Promise(resolve => setTimeout(resolve, delay * 1000));
+      return {
+        content: [{ type: "text", text: "fetch result simulation" }],
+        details: { source: "test" },
+      };
+    },
+    renderCall(args, theme) {
+      return new Text(theme.fg("toolTitle", "test_fetch") + ` delay=${args.delay ?? 3}s`, 0, 0);
+    },
+    renderResult(result, { expanded, isPartial }, theme, _context) {
+      if (isPartial) {
+        return new Text(theme.fg("muted", "Processing..."), 0, 0);
+      }
+      return new Text(theme.fg("success", "fetch result simulation"), 0, 0);
+    },
+    renderCall(args, theme) {
+      return new Text(theme.fg("toolTitle", "henyo_fetch ") + theme.fg("muted", `"${args.url}"`), 0, 0);
+    },
+    renderResult(result, { expanded, isPartial }, theme, context) {
+      // Show processing state for partial results
+      if (isPartial) {
+        return new Text(theme.fg("muted", "Processing..."), 0, 0);
+      }
+
+      const details = (result.details as any) || {};
+      const ui: FetchResultUI = {
+        url: details.url ?? context?.args?.url ?? '',
+        title: details.title ?? '',
+        source: details.source ?? 'unknown',
+        sizeLabel: details.sizeLabel,
+        contentLengthKB: details.contentLengthKB,
+        truncated: details.truncated,
+        oversized: details.oversized,
+        cached: details.cached,
+        cacheFilePath: details.cacheFilePath,
+        error: undefined,
+        errorCategory: undefined,
+        content: result.content?.[0]?.type === 'text' ? result.content[0].text : '',
+      };
+
+      // Check for error in the result
+      const err = (result as any).error;
+      if (err || details.errorCategory) {
+        ui.error = err?.message || err || details.error;
+        ui.errorCategory = details.errorCategory;
+        const header = buildErrorFetchHeader(ui, theme);
+        if (expanded) {
+          return new Text(`${header}\n\n(${theme.fg("muted", "press " + keyHint("app.tools.expand", "to collapse"))})`, 0, 0);
+        }
+        return new Text(`${header}\n(${theme.fg("muted", "press " + keyHint("app.tools.expand", "to expand"))})`, 0, 0);
+      }
+
+      if (expanded) {
+        const expandedText = buildExpandedFetchContent(ui, theme);
+        if (expandedText) {
+          return new Text(`${expandedText}\n\n(${theme.fg("muted", "press " + keyHint("app.tools.expand", "to collapse"))})`, 0, 0);
+        }
+      }
+
+      const header = buildCollapsedFetchHeader(ui, theme);
+      return new Text(`${header}\n(${theme.fg("muted", "press " + keyHint("app.tools.expand", "to expand"))})`, 0, 0);
     },
   });
 }

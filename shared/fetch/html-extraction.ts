@@ -1,6 +1,6 @@
 import { extractWithDefuddle, fetchWithJina } from './extract';
 import { isGitHubUrl, fetchGitHubContent } from './github';
-import { isCloudflareChallenge, isProtectedOrJsHeavy, isDefuddleFailure } from './detection';
+import { isCloudflareChallenge, isDefuddleFailure } from './detection';
 import type { FetchPageOptions, FetchResult } from './pipeline';
 
 export interface ExtractionResult {
@@ -9,6 +9,24 @@ export interface ExtractionResult {
   source: string;
 }
 
+/**
+ * Check if Jina content quality is acceptable.
+ * Returns true if the content has enough substance to be useful.
+ */
+function isJinaContentAcceptable(bodyText: string): boolean {
+  if (!bodyText) return false;
+  const trimmed = bodyText.trim();
+  // Need at least 50 chars of actual content
+  if (trimmed.length < 50) return false;
+  // Should not be just HTML tags or empty
+  const textOnly = trimmed.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
+  if (textOnly.length < 30) return false;
+  return true;
+}
+
+/**
+ * Extract content from HTML using Defuddle first, then Jina as fallback.
+ */
 export async function extractHtmlContent(
   html: string,
   url: string,
@@ -30,9 +48,9 @@ export async function extractHtmlContent(
     }
   }
 
-  // Step 2: Detect protected/JS-heavy pages
-  if (!result && !isProtectedOrJsHeavy(html)) {
-    // Safe to try Defuddle
+  // Step 2: Try Defuddle first (always, regardless of JS-heavy detection)
+  if (!result) {
+    let defuddleFailed = false;
     try {
       const extraction = await extractWithDefuddle(html, url);
       result = {
@@ -41,37 +59,26 @@ export async function extractHtmlContent(
         source: 'defuddle',
       };
     } catch (err) {
-      onUpdate?.({ content: [{ type: 'text', text: `Defuddle error: ${err.message || err}` }] });
+      defuddleFailed = true;
     }
 
-    // If Defuddle produced poor results, try Jina
+    // Check if Defuddle produced acceptable results
     if (!result || isDefuddleFailure({ ...result, author: '', description: '', date: '', lang: '' })) {
       if (!jinaEnabled) {
-        onUpdate?.({ content: [{ type: 'text', text: 'Warning: Defuddle failed and Jina is disabled.' }] });
         result = { bodyText: html, title: '', source: 'raw' };
       } else {
-        onUpdate?.({ content: [{ type: 'text', text: '[Defuddle returned low-quality content, trying Jina Reader...]' }] });
         try {
           const jinaResult = await fetchWithJina(url, jinaTimeout, headers);
-          result = { bodyText: jinaResult.bodyText, title: jinaResult.title, source: 'jina' };
+          if (isJinaContentAcceptable(jinaResult.bodyText)) {
+            result = { bodyText: jinaResult.bodyText, title: jinaResult.title, source: 'jina' };
+          } else {
+            // Jina content is poor quality, fall back to raw HTML
+            result = { bodyText: html, title: jinaResult.title, source: 'raw' };
+          }
         } catch (err) {
-          onUpdate?.({ content: [{ type: 'text', text: `Jina Reader error: ${err.message || err}` }] });
+          // Jina failed — fall back to raw, no message to avoid TUI clutter
           result = { bodyText: html, title: '', source: 'raw' };
         }
-      }
-    }
-  } else if (!result && isProtectedOrJsHeavy(html)) {
-    onUpdate?.({ content: [{ type: 'text', text: '[Detected bot protection / JS-heavy page, using Jina Reader directly...]' }] });
-    if (!jinaEnabled) {
-      onUpdate?.({ content: [{ type: 'text', text: 'Warning: Detected protected page and Jina is disabled.' }] });
-      result = { bodyText: html, title: '', source: 'raw' };
-    } else {
-      try {
-        const jinaResult = await fetchWithJina(url, jinaTimeout, headers);
-        result = { bodyText: jinaResult.bodyText, title: jinaResult.title, source: 'jina' };
-      } catch (err) {
-        onUpdate?.({ content: [{ type: 'text', text: `Jina Reader error: ${err.message || err}` }] });
-        result = { bodyText: html, title: '', source: 'raw' };
       }
     }
   }

@@ -66,7 +66,8 @@ export function isProtectedOrJsHeavy(html: string): boolean {
 }
 
 export function isDefuddleFailure(result: ExtractionResult): boolean {
-  const contentEmpty = !result.bodyText || result.bodyText.trim().length < 150;
+  // Content must have some substance — 100 chars minimum (example.com returns ~149 chars)
+  const contentEmpty = !result.bodyText || result.bodyText.trim().length < 100;
   const titleBad = !result.title ||
     result.title === 'Untitled' ||
     result.title === 'Untitled Document' ||
