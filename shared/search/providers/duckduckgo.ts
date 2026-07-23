@@ -2,12 +2,17 @@ import { pickRandom, delay, USER_AGENTS, ACCEPT_LANGUAGES } from '../../user-age
 import { enqueue } from '../queue';
 import { RateLimitStore, DEFAULT_RATE_LIMIT_COOLDOWNS } from '../../rate-limit';
 import { SearchResult, ProviderConfig, isCaptchaResponse, withRetry, extractDomain } from './base';
+import { shouldTrace, traceLog } from '../trace';
 
 // ─── DuckDuckGo Provider ─────────────────────────────────────────────────────
 
 const rateLimitStore = new RateLimitStore();
 
 export async function searchDuckDuckGo(query: string, _config?: ProviderConfig, signal?: AbortSignal): Promise<SearchResult[]> {
+  const startTime = Date.now();
+  const traceConfig = (globalThis as any).__henyoTraceConfig;
+  const traceEnabled = shouldTrace(traceConfig, 'duckduckgo');
+
   return enqueue('duckduckgo', async () => {
     const endpoints = [
       'https://html.duckduckgo.com/html/?q=',
@@ -125,6 +130,9 @@ export async function searchDuckDuckGo(query: string, _config?: ProviderConfig, 
       }
     }
 
+    if (traceEnabled) {
+      traceLog({ provider: 'duckduckgo', query, durationMs: Date.now() - startTime, resultCount: results.length });
+    }
     return results;
   });
 }

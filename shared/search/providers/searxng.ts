@@ -3,6 +3,7 @@ import { enqueue } from '../queue';
 import { PUBLIC_INSTANCES, type SearXNGInstance } from '../searxng-instances';
 import { isInstanceHealthy, healthCheckInstance, getHealthyInstances } from '../searxng-health';
 import { SearchResult, ProviderConfig } from './base';
+import { shouldTrace, traceLog } from '../trace';
 
 // ─── SearXNG Provider ────────────────────────────────────────────────────────
 
@@ -12,7 +13,10 @@ import { SearchResult, ProviderConfig } from './base';
  * public instances, skipping unhealthy ones.
  */
 export async function searchSearXNG(query: string, config?: ProviderConfig, signal?: AbortSignal): Promise<SearchResult[]> {
+  const startTime = Date.now();
   const customUrl = config?.url as string | undefined;
+  const traceConfig = (globalThis as any).__henyoTraceConfig;
+  const traceEnabled = shouldTrace(traceConfig, 'searxng');
 
   // If custom URL provided (non-empty), use it (user's own instance)
   if (customUrl && customUrl.trim()) {
@@ -46,6 +50,9 @@ export async function searchSearXNG(query: string, config?: ProviderConfig, sign
   }
 
   // Empty URL — return empty for backward compatibility
+  if (traceEnabled) {
+    traceLog({ provider: 'searxng', query, durationMs: Date.now() - startTime, resultCount: 0 });
+  }
   return [];
 }
 

@@ -10,6 +10,8 @@ export interface WebSearchConfig {
   'rate-limit-cooldowns'?: Record<string, number>;
   'max-per-domain'?: number;
   'api-key'?: string;
+  /** Trace logging: true for all providers, string[] for specific providers, undefined to disable */
+  'trace'?: boolean | string[];
 }
 export interface WebFetchConfig {
   jinaEnabled?: boolean;
