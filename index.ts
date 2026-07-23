@@ -277,12 +277,13 @@ export default function (pi: ExtensionAPI) {
 
         // Handle oversized content — return metadata + read strategy
         if (result.oversized) {
+          const wasCached = !noCache && result.cached;
           return {
             content: [{
               type: "text",
               text: JSON.stringify({
                 oversized: true,
-                cached: true,
+                cached: wasCached,
                 sizeLabel: result.sizeLabel,
                 url: result.resolvedUrl,
                 title: result.title,
@@ -296,7 +297,7 @@ export default function (pi: ExtensionAPI) {
               url: result.resolvedUrl,
               title: result.title,
               source: result.source,
-              cached: true,
+              cached: wasCached,
               cacheFilePath: result.cacheFilePath,
               contentLength: result.contentLength,
               contentLengthKB: result.contentLengthKB,
