@@ -8,6 +8,7 @@ import { smartTruncate } from './truncate';
 import { fetchWithRetry } from './retry';
 import { normalizeUrl } from '../format';
 import { isSafeUrl } from './security';
+import { extractPdfContent } from './pdf-extract';
 import type { ExtractionResult } from './html-extraction';
 
 function getCacheDir(subdir: string): string {
@@ -269,8 +270,52 @@ export async function fetchPage(options: FetchPageOptions): Promise<FetchResult>
       let source: string;
 
       if (contentType.includes('application/pdf')) {
-        message = 'This is a PDF document. Use a PDF reader to view it.';
-        source = 'pdf';
+        // Extract PDF content
+        const pdfBytes = new Uint8Array(text.length);
+        for (let i = 0; i < text.length; i++) {
+          pdfBytes[i] = text.charCodeAt(i);
+        }
+        const pdfResult = await extractPdfContent(pdfBytes);
+        const pdfContentLength = pdfResult.text.length;
+
+        // Check content threshold for PDF
+        if (pdfContentLength > contentThreshold) {
+          const cacheFilePath = keyToPath(
+            getCacheDir('henyo_fetch'),
+            cacheKey,
+          );
+          const sizeInfo = formatSize(pdfContentLength);
+          const fetchResult: FetchResult = {
+            text: pdfResult.text,
+            resolvedUrl,
+            title: pdfResult.title || '',
+            source: 'pdf',
+            truncated: false,
+            contentLengthKB: sizeInfo.contentLengthKB,
+            sizeLabel: sizeInfo.sizeLabel,
+            cacheKey: cacheKey,
+            cacheFilePath: cacheFilePath,
+            contentLength: pdfContentLength,
+            oversized: true,
+            errorCategory: 'size-exceeded',
+          };
+          if (!noCache) cache.put(cacheKey, fetchResult);
+          return fetchResult;
+        }
+
+        const sizeInfo = formatSize(pdfContentLength);
+        const result: FetchResult = {
+          text: pdfResult.text,
+          resolvedUrl,
+          title: pdfResult.title || '',
+          source: 'pdf',
+          truncated: false,
+          contentLengthKB: sizeInfo.contentLengthKB,
+          sizeLabel: sizeInfo.sizeLabel,
+          cached: false,
+        };
+        if (!noCache) cache.put(cacheKey, result);
+        return result;
       } else if (contentType.includes('image/')) {
         message = 'This is an image file. Use an image viewer to view it.';
         source = 'image';
