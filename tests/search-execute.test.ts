@@ -22,10 +22,6 @@ vi.mock('../shared/search/providers/wikipedia', () => ({
   searchWikipedia: vi.fn(),
 }));
 
-vi.mock('../shared/search/providers/searxng', () => ({
-  searchSearXNG: vi.fn(),
-}));
-
 vi.mock('../shared/cache', () => ({
   createCache: vi.fn(),
 }));
@@ -47,7 +43,6 @@ import { searchStackOverflow } from '../shared/search/providers/stackoverflow';
 import { searchNpm } from '../shared/search/providers/npm';
 import { searchGitHub } from '../shared/search/providers/github';
 import { searchWikipedia } from '../shared/search/providers/wikipedia';
-import { searchSearXNG } from '../shared/search/providers/searxng';
 import { createCache } from '../shared/cache';
 import { formatResults } from '../shared/format';
 import { fetchPage } from '../shared/fetch/pipeline';
@@ -107,7 +102,6 @@ describe('execute() pipeline — integration tests', () => {
     setupMockProvider(searchNpm, results);
     setupMockProvider(searchGitHub, results);
     setupMockProvider(searchWikipedia, results);
-    setupMockProvider(searchSearXNG, results);
   }
 
   function setupMockCache(hit: SearchResult[] | null = null) {

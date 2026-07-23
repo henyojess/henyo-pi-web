@@ -277,7 +277,6 @@ describe('PROVIDER_MAP', () => {
     expect(PROVIDER_MAP).toHaveProperty('github');
     expect(PROVIDER_MAP).toHaveProperty('wikipedia');
     expect(PROVIDER_MAP).toHaveProperty('jina');
-    expect(PROVIDER_MAP).toHaveProperty('searxng');
   });
 
   it('all values are functions', () => {
@@ -339,20 +338,6 @@ describe('AbortSignal propagation', () => {
     const controller = new AbortController();
     await searchWikipedia('test', undefined, controller.signal);
     expect(receivedSignal).toBe(controller.signal);
-  });
-
-  it('SearXNG accepts signal parameter without error', async () => {
-    vi.spyOn(global, 'fetch').mockImplementation(async () => {
-      return new Response(JSON.stringify({ results: [] }), {
-        status: 200,
-        headers: { 'Content-Type': 'application/json' },
-      });
-    });
-
-    const controller = new AbortController();
-    // Should not throw — signal is connected to internal controller
-    const results = await searchSearXNG('test', { url: 'https://searx.local' }, controller.signal);
-    expect(results).toEqual([]);
   });
 
   it('Jina accepts signal parameter without error', async () => {

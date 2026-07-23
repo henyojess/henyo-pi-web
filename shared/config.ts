@@ -91,13 +91,10 @@ let _cachedSettings: Settings | null = null;
 // ─── Config Validation ───────────────────────────────────────────────────────
 
 /**
- * Validate henyo-search config. Throws on missing required fields.
- * - searxng provider requires a `url` in its config
+ * Validate henyo-search config. Currently no required fields.
  */
 export function validateWebSearchConfig(config: WebSearchConfig): void {
-  const contexts = config.contexts || {};
-  // SearXNG works with bundled public instances — no URL required
-  // Users can override with a custom URL via searxng.url in config
+  // No required fields — all providers work out of the box
 }
 
 /**

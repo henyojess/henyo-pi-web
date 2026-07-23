@@ -117,18 +117,6 @@ describe('buildProviderChain', () => {
     expect(chain.length).toBe(0);
   });
 
-  it('SearXNG priority 0 replaces chain', () => {
-    const contextsOverride = {
-      custom: {
-        searxng: { priority: 0, url: 'http://localhost:8080' },
-        duckduckgo: { priority: 1 },
-      },
-    };
-    const chain = buildProviderChain('custom', contextsOverride);
-    expect(chain.length).toBe(1);
-    expect(chain[0].name).toBe('searxng');
-  });
-
   it('providers are sorted by priority', () => {
     const mixedContexts = {
       mixed: {

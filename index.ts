@@ -143,10 +143,7 @@ export default function (pi: ExtensionAPI) {
           try {
             // Provider-specific config
             let results: SearchResult[];
-            if (provider.name === 'searxng') {
-              const searxngConfig = searchConfig.contexts?.[contextName]?.searxng;
-              results = await provider.fn(query, { url: searxngConfig?.url }, signal);
-            } else if (provider.name === 'stackoverflow') {
+            if (provider.name === 'stackoverflow') {
               const apiKey = searchConfig['api-key'];
               results = await provider.fn(query, { apiKey }, signal);
             } else {
