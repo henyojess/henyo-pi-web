@@ -47,7 +47,6 @@ const DEFAULTS: Settings = {
     contexts: {
       coding: {
         duckduckgo: { priority: 1 },
-        searxng: { priority: 1 },
         stackoverflow: { priority: 1 },
         npm: { priority: 1 },
         github: { priority: 1 },
@@ -55,7 +54,6 @@ const DEFAULTS: Settings = {
       },
       general: {
         duckduckgo: { priority: 1 },
-        searxng: { priority: 1 },
         wikipedia: { priority: 1 },
         ranking: true,
       },
@@ -98,20 +96,8 @@ let _cachedSettings: Settings | null = null;
  */
 export function validateWebSearchConfig(config: WebSearchConfig): void {
   const contexts = config.contexts || {};
-  for (const contextName of Object.keys(contexts)) {
-    const providers = contexts[contextName]!;
-    for (const providerName of Object.keys(providers)) {
-      if (providerName === 'searxng') {
-        const searxngConfig = providers.searxng!;
-        if (!searxngConfig.url || searxngConfig.url.trim() === '') {
-          throw new Error(
-            `SearXNG provider is configured in "${contextName}" context but "url" is missing or empty. ` +
-            `Add a SearXNG instance URL to your henyo-search config, or remove searxng from the provider list.`
-          );
-        }
-      }
-    }
-  }
+  // SearXNG works with bundled public instances — no URL required
+  // Users can override with a custom URL via searxng.url in config
 }
 
 /**
