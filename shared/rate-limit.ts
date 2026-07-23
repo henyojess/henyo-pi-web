@@ -95,6 +95,7 @@ export const DEFAULT_RATE_LIMIT_COOLDOWNS: Record<string, number> = {
   npm: 120_000,          // 120s
   wikipedia: 60_000,     // 60s
   jina: 120_000,         // 120s
+  searxng: 120_000,      // 120s (Playwright — slower)
 };
 
 export function keyToPath(dir: string, key: string): string {

@@ -6,6 +6,7 @@ import { searchNpm } from './npm';
 import { searchGitHub } from './github';
 import { searchWikipedia } from './wikipedia';
 import { searchJina } from './jina';
+import { searchSearXNG } from './searxng';
 
 // Re-export all provider functions and types
 export type {
@@ -24,6 +25,7 @@ export {
   searchGitHub,
   searchWikipedia,
   searchJina,
+  searchSearXNG,
   extractDomain,
 };
 
@@ -36,4 +38,5 @@ export const PROVIDER_MAP: Record<string, ProviderFn> = {
   github: searchGitHub,
   wikipedia: searchWikipedia,
   jina: searchJina,
+  searxng: searchSearXNG,
 };

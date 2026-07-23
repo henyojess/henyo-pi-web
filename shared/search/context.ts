@@ -99,6 +99,11 @@ export function buildProviderChain(contextName: string, contexts: ContextConfig)
   const context = contexts[contextName] || {};
   const providers: Provider[] = [];
 
+  // Check for SearXNG override (priority 0 = replace default chain)
+  if (context.searxng && context.searxng.priority === 0) {
+    return [{ name: 'searxng', priority: 0, fn: PROVIDER_MAP.searxng }];
+  }
+
   for (const [name, cfg] of Object.entries(context)) {
     if (cfg.priority !== undefined && PROVIDER_MAP[name]) {
       providers.push({ name, priority: cfg.priority, fn: PROVIDER_MAP[name] });
