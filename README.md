@@ -44,9 +44,16 @@ Search the web using DuckDuckGo, Stack Overflow, npm, GitHub, Wikipedia, or a cu
 - Reports per-provider status (ok/error/timeout) with result counts
 - Supports partial results on abort
 
+**TUI Rendering:**
+
+- Collapsed/expanded views — header shows context, count, and per-provider breakdown (`duckduckgo:5 stackoverflow:3`)
+- Collapse/expand hints with keybindings
+- Partial results show "Processing…" while fetching
+- Post-slice result count (accurate after dedup/rank/diversify/max)
+
 ### `henyo_fetch`
 
-Extract clean readable content from any URL. Uses Defuddle locally with Jina Reader fallback. Handles Cloudflare protection, SPAs, GitHub raw files, JSON, plain text, and binary content detection (PDF, images, archives). Includes SSRF protection. Cached 1 hour.
+Extract clean readable content from any URL. Uses Defuddle-first extraction with Jina quality-check fallback. Handles Cloudflare protection, SPAs, GitHub raw files, JSON, plain text, and binary content detection (PDF, images, archives). Includes SSRF protection. Cached 1 hour.
 
 **Parameters:**
 
@@ -62,6 +69,17 @@ Extract clean readable content from any URL. Uses Defuddle locally with Jina Rea
 - Oversized content returns metadata only (URL, title, source, cache path)
 - Politeness delay between requests (configurable min/max)
 - Retry with exponential backoff
+- `cached` flag on cached results
+- Error categories in `details` (`errorCategory`: ssrf, invalid-url, timeout, not-found, forbidden, server-error, network, unknown)
+
+**TUI Features:**
+
+- **Source badges** — color-coded `[defuddle]`, `[jina]`, `[github]`, etc.
+- **Size labels** — human-readable sizes (`12.3 KB`, `1.45 MB`)
+- **Status indicators** — `[cached]`, `[truncated]`, `[oversized]` badges
+- **Error cards** — categorized errors with actionable messages
+- **Oversized content card** — structured metadata with guidance (reduce threshold, check cache, fresh fetch)
+- **Collapsible content** — press expand key to view full content, collapse to return to header
 
 ## Configuration
 

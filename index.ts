@@ -275,12 +275,22 @@ export default function (pi: ExtensionAPI) {
           headers,
         });
 
-        // Handle oversized content — return metadata only
+        // Handle oversized content — return metadata + read strategy
         if (result.oversized) {
           return {
             content: [{
               type: "text",
-              text: `[Cached — ${result.sizeLabel || result.contentLengthKB?.toFixed(1) || '?'}]\n\nURL: ${result.resolvedUrl}\nTitle: ${result.title}\nSource: ${result.source}\nCache: ${result.cacheFilePath}]`,
+              text: JSON.stringify({
+                oversized: true,
+                cached: true,
+                sizeLabel: result.sizeLabel,
+                url: result.resolvedUrl,
+                title: result.title,
+                source: result.source,
+                cacheFilePath: result.cacheFilePath,
+                readStrategy: "prefer grep or read(offset/limit) to extract specific sections",
+                warning: "reading the full file may bloat context",
+              }, null, 2),
             }],
             details: {
               url: result.resolvedUrl,
