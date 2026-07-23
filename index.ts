@@ -413,52 +413,5 @@ export default function (pi: ExtensionAPI) {
       }
       return new Text(theme.fg("success", "fetch result simulation"), 0, 0);
     },
-    renderCall(args, theme) {
-      return new Text(theme.fg("toolTitle", "henyo_fetch ") + theme.fg("muted", `"${args.url}"`), 0, 0);
-    },
-    renderResult(result, { expanded, isPartial }, theme, context) {
-      // Show processing state for partial results
-      if (isPartial) {
-        return new Text(theme.fg("muted", "Processing..."), 0, 0);
-      }
-
-      const details = (result.details as any) || {};
-      const ui: FetchResultUI = {
-        url: details.url ?? context?.args?.url ?? '',
-        title: details.title ?? '',
-        source: details.source ?? 'unknown',
-        sizeLabel: details.sizeLabel,
-        contentLengthKB: details.contentLengthKB,
-        truncated: details.truncated,
-        oversized: details.oversized,
-        cached: details.cached,
-        cacheFilePath: details.cacheFilePath,
-        error: undefined,
-        errorCategory: undefined,
-        content: result.content?.[0]?.type === 'text' ? result.content[0].text : '',
-      };
-
-      // Check for error in the result
-      const err = (result as any).error;
-      if (err || details.errorCategory) {
-        ui.error = err?.message || err || details.error;
-        ui.errorCategory = details.errorCategory;
-        const header = buildErrorFetchHeader(ui, theme);
-        if (expanded) {
-          return new Text(`${header}\n\n(${theme.fg("muted", "press " + keyHint("app.tools.expand", "to collapse"))})`, 0, 0);
-        }
-        return new Text(`${header}\n(${theme.fg("muted", "press " + keyHint("app.tools.expand", "to expand"))})`, 0, 0);
-      }
-
-      if (expanded) {
-        const expandedText = buildExpandedFetchContent(ui, theme);
-        if (expandedText) {
-          return new Text(`${expandedText}\n\n(${theme.fg("muted", "press " + keyHint("app.tools.expand", "to collapse"))})`, 0, 0);
-        }
-      }
-
-      const header = buildCollapsedFetchHeader(ui, theme);
-      return new Text(`${header}\n(${theme.fg("muted", "press " + keyHint("app.tools.expand", "to expand"))})`, 0, 0);
-    },
   });
 }
