@@ -47,6 +47,7 @@ const DEFAULTS: Settings = {
     contexts: {
       coding: {
         duckduckgo: { priority: 1 },
+        searxng: { priority: 1 },
         stackoverflow: { priority: 1 },
         npm: { priority: 1 },
         github: { priority: 1 },
@@ -54,6 +55,7 @@ const DEFAULTS: Settings = {
       },
       general: {
         duckduckgo: { priority: 1 },
+        searxng: { priority: 1 },
         wikipedia: { priority: 1 },
         ranking: true,
       },
