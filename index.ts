@@ -17,8 +17,6 @@ import { PROVIDER_MAP } from "./shared/search/providers";
 import type { SearchResult } from "./shared/search/providers";
 import { fetchPage } from "./shared/fetch/pipeline";
 import { formatResults, normalizeUrl, diversifyByDomain, rankResults } from "./shared/format";
-import { buildCollapsedFetchHeader, buildExpandedFetchContent, buildErrorFetchHeader, type FetchResultUI } from "./shared/fetch/ui";
-
 import type { FetchErrorCategory } from "./shared/fetch/pipeline";
 
 function getCacheDir(subdir: string): string {
@@ -341,6 +339,7 @@ export default function (pi: ExtensionAPI) {
           },
         };
       }
+    },
     renderCall(args, theme) {
       return new Text(theme.fg("toolTitle", "henyo_fetch ") + `"${args.url}"`, 0, 0);
     },
