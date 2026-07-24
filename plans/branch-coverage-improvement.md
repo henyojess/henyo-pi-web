@@ -41,10 +41,6 @@ Raise overall branch coverage from **86.13%** → **90%+**
 ## Phase 3: `shared/search/providers.ts` — 79.59% → 90.19% ✅ (partial)
 
 ### Completed
-- [x] **Test:** `searchSearXNG('')` returns empty array (empty string URL)
-- [x] **Test:** SearXNG returns non-OK HTTP status (500)
-- [x] **Test:** SearXNG returns malformed JSON
-- [x] **Test:** SearXNG throws network error
 - [x] **Test:** `searchNpm` network error
 - [x] **Test:** `searchWikipedia` network error
 
