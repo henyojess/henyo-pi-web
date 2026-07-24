@@ -2,7 +2,7 @@ import { describe, it, expect, vi } from 'vitest';
 import { detectContext, CODING_SIGNALS } from '../../shared/search/context';
 import { PROVIDER_MAP } from '../../shared/search/providers';
 import { extractDomain } from '../../shared/search/providers/base';
-import { searchNpm, searchGitHub, searchWikipedia, searchSearXNG, searchJina, searchStackOverflowAPI } from '../../shared/search/providers';
+import { searchNpm, searchGitHub, searchWikipedia, searchJina, searchStackOverflowAPI } from '../../shared/search/providers';
 
 vi.mock('../../shared/user-agents', async (importOriginal) => {
   const actual = await importOriginal<typeof import('../../shared/user-agents')>();
