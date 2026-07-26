@@ -81,6 +81,29 @@ Extract clean readable content from any URL. Uses Defuddle-first extraction with
 - **Oversized content card** — structured metadata with guidance (reduce threshold, check cache, fresh fetch)
 - **Collapsible content** — press expand key to view full content, collapse to return to header
 
+## Structure
+
+```
+henyo-pi-web/
+├── package.json          # Extension manifest with pi entry point
+├── index.ts              # Extension entry point (registers henyo_search + henyo_fetch)
+├── skills/
+│   └── deep-research/    # Multi-step autonomous research workflow with henyo_search/henyo_fetch
+│       └── references/   # Reference docs (evidence collection, source credibility, report templates)
+├── shared/               # Shared utilities between tools
+├── tests/                # Unit tests
+├── vitest.config.ts      # Vitest test runner config
+└── README.md
+```
+
+## Bundled Skills
+
+### `/skill:deep-research`
+
+A structured methodology for conducting deep, multi-step research — designed to work alongside henyo-pi-web's `henyo_search` and `henyo_fetch` tools. Guides the agent through planning, iterative retrieval, cross-source validation, and synthesis into a structured report with full citations. Use for complex research questions, competitive analysis, literature reviews, or any task requiring thorough investigation beyond a single search.
+
+**Workflow:** Plan → Retrieve → Cross-Validate → Synthesize → Report
+
 ## Configuration
 
 Optional settings go in `~/.pi/settings.json`:

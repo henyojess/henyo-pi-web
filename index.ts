@@ -3,6 +3,13 @@ import { keyHint } from "@earendil-works/pi-coding-agent";
 import { Type } from "typebox";
 import { Text } from "@earendil-works/pi-tui";
 import fs from "node:fs";
+import { join, dirname } from "node:path";
+import { fileURLToPath } from "node:url";
+
+const __dirname = dirname(fileURLToPath(import.meta.url));
+function extPath(...segments: string[]) {
+  return join(__dirname, ...segments);
+}
 import { FetchResultUI, buildErrorFetchHeader, buildExpandedFetchContent, buildCollapsedFetchHeader } from "./shared/fetch/ui.js";
 import type { FetchErrorCategory } from "./shared/fetch/pipeline.js";
 const LOG = "/tmp/henyo-fetch-debug.log";
@@ -55,6 +62,15 @@ function buildExpandedContent(result: { content: Array<{ type: string; text: str
 export default function (pi: ExtensionAPI) {
   const config = loadConfig();
   validateConfig(config);
+
+  // --- Skill registration ---
+  pi.on('resources_discover', async (_event, _ctx) => {
+    return {
+      skillPaths: [
+        extPath('skills', 'deep-research'),
+      ],
+    };
+  });
 
   // --- henyo_search tool ---
   pi.registerTool({
