@@ -3,21 +3,15 @@ import { keyToPath } from '../rate-limit';
 import type { WebFetchConfig } from '../config';
 import { pickRandom, delay, USER_AGENTS, ACCEPT_LANGUAGES } from '../user-agents';
 import { extractHtmlContent } from './html-extraction';
-import { isCloudflareChallenge } from './detection';
+import { handleContent } from './content-handlers';
 import { smartTruncate } from './truncate';
 import { fetchWithRetry } from './retry';
 import { normalizeUrl } from '../format';
 import { isSafeUrl } from './security';
-import { extractPdfContent } from './pdf-extract';
 import type { ExtractionResult } from './html-extraction';
 
-function getCacheDir(subdir: string): string {
-  const home = process.env.HOME || process.env.USERPROFILE;
-  return `${home}/.pi/tools-cache/${subdir}`;
-}
-
 /** Format byte count to human-readable size label. */
-function formatSize(bytes: number): { contentLengthKB: number; sizeLabel: string } {
+export function formatSize(bytes: number): { contentLengthKB: number; sizeLabel: string } {
   const kb = bytes / 1024;
   if (kb < 1024) {
     return { contentLengthKB: Math.round(kb * 10) / 10, sizeLabel: `${Math.round(kb * 10) / 10} KB` };
@@ -27,7 +21,7 @@ function formatSize(bytes: number): { contentLengthKB: number; sizeLabel: string
 }
 
 /** Create a FetchResult with size metadata pre-computed. */
-function makeResult(
+export function makeResult(
   base: Pick<FetchResult, 'resolvedUrl' | 'source' | 'truncated'>,
   text: string,
   title: string,
@@ -44,6 +38,11 @@ function makeResult(
     ...(sizeInfo ? { contentLengthKB: sizeInfo.contentLengthKB, sizeLabel: sizeInfo.sizeLabel } : {}),
     ...extra,
   };
+}
+
+function getCacheDir(subdir: string): string {
+  const home = process.env.HOME || process.env.USERPROFILE;
+  return `${home}/.pi/tools-cache/${subdir}`;
 }
 
 export interface FetchPageOptions {
@@ -148,6 +147,7 @@ export async function fetchPage(options: FetchPageOptions): Promise<FetchResult>
   // Stream the response with size limit
   const reader = res.body?.getReader();
   let text: string;
+  let rawBytes: Uint8Array | null = null;
   if (reader) {
     const chunks: Uint8Array[] = [];
     let totalSize = 0;
@@ -162,14 +162,14 @@ export async function fetchPage(options: FetchPageOptions): Promise<FetchResult>
         }
         chunks.push(value);
       }
-      const decoder = new TextDecoder();
-      const textBytes = new Uint8Array(totalSize);
+      rawBytes = new Uint8Array(totalSize);
       let offset = 0;
       for (const chunk of chunks) {
-        textBytes.set(chunk, offset);
+        rawBytes.set(chunk, offset);
         offset += chunk.length;
       }
-      text = decoder.decode(textBytes);
+      const decoder = new TextDecoder();
+      text = decoder.decode(rawBytes);
     } catch (e) {
       if (e instanceof Error && e.message.includes('max-response-size')) {
         const sizeInfo = formatSize(totalSize);
@@ -192,165 +192,20 @@ export async function fetchPage(options: FetchPageOptions): Promise<FetchResult>
     text = await res.text();
   }
 
-  // ─── Content-type aware handling ───────────────────────────────────────
+  // ─── Content-type routing (JSON, text, binary, PDF) ────────────────────
   const contentType = res.headers.get('Content-Type') || '';
-
-  if (contentType.includes('application/json')) {
-    try {
-      const jsonStr = JSON.stringify(JSON.parse(text), null, 2);
-      const jsonLength = jsonStr.length;
-
-      // Check if JSON content exceeds threshold — same as HTML oversized handling
-      if (jsonLength > contentThreshold) {
-        const cacheFilePath = keyToPath(
-          getCacheDir('henyo_fetch'),
-          cacheKey,
-        );
-        const sizeInfo = formatSize(jsonLength);
-        const fetchResult: FetchResult = {
-          text: `JSON response exceeded content-threshold limit of ${contentThreshold} characters.`,
-          resolvedUrl,
-          title: '',
-          source: 'json',
-          truncated: false,
-          contentLengthKB: sizeInfo.contentLengthKB,
-          sizeLabel: sizeInfo.sizeLabel,
-          cacheKey: cacheKey,
-          cacheFilePath: cacheFilePath,
-          contentLength: jsonLength,
-          oversized: true,
-          errorCategory: 'size-exceeded',
-        };
-        if (!noCache) {
-          cache.put(cacheKey, fetchResult);
-        }
-        return fetchResult;
-      }
-
-      const result: FetchResult = makeResult(
-        { resolvedUrl, source: 'json', truncated: false },
-        jsonStr,
-        '',
-        jsonLength,
-      );
-      if (!noCache) cache.put(cacheKey, result);
-      return result;
-    } catch (e) {
-      // Fall through to treat as raw text
-    }
-  }
-
-  if (contentType.includes('text/plain')) {
-    const result: FetchResult = makeResult(
-      { resolvedUrl, source: 'text', truncated: false },
-      text,
-      '',
-      text.length,
-    );
-    if (!noCache) cache.put(cacheKey, result);
-    return result;
-  }
-
-  // ─── Binary content detection ──────────────────────────────────────────
-  const binaryTypes = [
-    'application/pdf',
-    'image/',
-    'application/octet-stream',
-    'application/zip',
-    'application/x-tar',
-    'application/gzip',
-    'application/x-bzip',
-    'application/x-7z-compressed',
-    'application/x-rar',
-  ];
-
-  for (const binaryType of binaryTypes) {
-    if (contentType.includes(binaryType)) {
-      let message: string;
-      let source: string;
-
-      if (contentType.includes('application/pdf')) {
-        // Extract PDF content
-        const pdfBytes = new Uint8Array(text.length);
-        for (let i = 0; i < text.length; i++) {
-          pdfBytes[i] = text.charCodeAt(i);
-        }
-        const pdfResult = await extractPdfContent(pdfBytes);
-        const pdfContentLength = pdfResult.text.length;
-
-        // Check content threshold for PDF
-        if (pdfContentLength > contentThreshold) {
-          const cacheFilePath = keyToPath(
-            getCacheDir('henyo_fetch'),
-            cacheKey,
-          );
-          const sizeInfo = formatSize(pdfContentLength);
-          const fetchResult: FetchResult = {
-            text: pdfResult.text,
-            resolvedUrl,
-            title: pdfResult.title || '',
-            source: 'pdf',
-            truncated: false,
-            contentLengthKB: sizeInfo.contentLengthKB,
-            sizeLabel: sizeInfo.sizeLabel,
-            cacheKey: cacheKey,
-            cacheFilePath: cacheFilePath,
-            contentLength: pdfContentLength,
-            oversized: true,
-            errorCategory: 'size-exceeded',
-          };
-          if (!noCache) cache.put(cacheKey, fetchResult);
-          return fetchResult;
-        }
-
-        const sizeInfo = formatSize(pdfContentLength);
-        const result: FetchResult = {
-          text: pdfResult.text,
-          resolvedUrl,
-          title: pdfResult.title || '',
-          source: 'pdf',
-          truncated: false,
-          contentLengthKB: sizeInfo.contentLengthKB,
-          sizeLabel: sizeInfo.sizeLabel,
-          cached: false,
-        };
-        if (!noCache) cache.put(cacheKey, result);
-        return result;
-      } else if (contentType.includes('image/')) {
-        message = 'This is an image file. Use an image viewer to view it.';
-        source = 'image';
-      } else if (contentType.includes('application/zip')) {
-        message = 'This is a ZIP archive. Content cannot be displayed as text.';
-        source = 'zip';
-      } else if (contentType.includes('application/x-tar')) {
-        message = 'This is a TAR archive. Content cannot be displayed as text.';
-        source = 'tar';
-      } else if (contentType.includes('application/gzip')) {
-        message = 'This is a GZIP archive. Content cannot be displayed as text.';
-        source = 'gzip';
-      } else if (contentType.includes('application/x-bzip')) {
-        message = 'This is a BZIP archive. Content cannot be displayed as text.';
-        source = 'bzip';
-      } else if (contentType.includes('application/x-7z-compressed')) {
-        message = 'This is a 7Z archive. Content cannot be displayed as text.';
-        source = '7z';
-      } else if (contentType.includes('application/x-rar')) {
-        message = 'This is a RAR archive. Content cannot be displayed as text.';
-        source = 'rar';
-      } else {
-        message = 'This is a binary file. Content cannot be displayed as text.';
-        source = 'binary';
-      }
-
-      const result: FetchResult = makeResult(
-        { resolvedUrl, source, truncated: false },
-        message,
-        '',
-        text.length,
-      );
-      if (!noCache) cache.put(cacheKey, result);
-      return result;
-    }
+  const contentResult = await handleContent({
+    body: text,
+    rawBytes,
+    contentType,
+    resolvedUrl,
+    cacheKey,
+    noCache,
+    contentThreshold,
+    cache,
+  });
+  if (contentResult) {
+    return contentResult;
   }
 
   // ─── HTML extraction pipeline ──────────────────────────────────────────
