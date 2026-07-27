@@ -398,33 +398,4 @@ export default function (pi: ExtensionAPI) {
     },
   });
 
-  // --- Test tool for debugging TUI rendering ---
-  pi.registerTool({
-    name: "test_fetch",
-    label: "Test Fetch",
-    description: "Simple test tool to debug TUI rendering",
-    promptSnippet: "Simple test tool",
-    parameters: Type.Object({
-      delay: Type.Optional(Type.Integer({ default: 3 })),
-    }),
-    async execute(_toolCallId, params, signal, onUpdate, _ctx) {
-      const delay = params.delay ?? 3;
-      // Send partial result to trigger isPartial: true
-      onUpdate?.({ content: [{ type: "text", text: "" }] });
-      await new Promise(resolve => setTimeout(resolve, delay * 1000));
-      return {
-        content: [{ type: "text", text: "fetch result simulation" }],
-        details: { source: "test" },
-      };
-    },
-    renderCall(args, theme) {
-      return new Text(theme.fg("toolTitle", "test_fetch") + ` delay=${args.delay ?? 3}s`, 0, 0);
-    },
-    renderResult(result, { expanded, isPartial }, theme, _context) {
-      if (isPartial) {
-        return new Text(theme.fg("muted", "Processing..."), 0, 0);
-      }
-      return new Text(theme.fg("success", "fetch result simulation"), 0, 0);
-    },
-  });
 }
