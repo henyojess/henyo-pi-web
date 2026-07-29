@@ -37,7 +37,7 @@ Search the web using DuckDuckGo, Stack Overflow, npm, GitHub, Wikipedia, or Jina
 
 **Features:**
 
-- Auto-detects coding vs general queries using multi-token pattern matching
+- Auto-detects coding vs general queries using weighted pattern matching — strong signals (errors, package managers, imports) trigger coding immediately, weak signals require multiple matches
 - Runs providers sequentially by priority group, deduplicates results
 - Applies corpus-level BM25 ranking within each priority group
 - Diversifies results by domain (default 2 per domain)

@@ -13,7 +13,7 @@ describe('detectContext', () => {
     expect(detectContext('what is the capital of France')).toBe('general');
   });
 
-  it('returns general for single coding signal', () => {
+  it('returns general for single weak coding signal', () => {
     expect(detectContext('const x = 5')).toBe('general');
   });
 
@@ -29,7 +29,7 @@ describe('detectContext', () => {
     expect(detectContext('npm install package')).toBe('coding');
   });
 
-  it('returns general for npm as a word alone', () => {
+  it('returns general for npm as a word alone (no subcommand)', () => {
     expect(detectContext('npm is a package manager')).toBe('general');
   });
 
@@ -37,7 +37,7 @@ describe('detectContext', () => {
     expect(detectContext('git commit const x')).toBe('coding');
   });
 
-  it('returns general for non-coding query with one signal', () => {
+  it('returns general for non-coding query with one weak signal', () => {
     expect(detectContext('class schedule for today')).toBe('general');
   });
 
@@ -46,10 +46,10 @@ describe('detectContext', () => {
   });
 
   it('exact pattern matches work', () => {
-    // Single error name → 1 signal → general (needs 2+ signals for coding)
-    expect(detectContext('SyntaxError: unexpected token')).toBe('general');
-    expect(detectContext('Traceback (most recent call last)')).toBe('general'); // only 1 signal
-    // Compound: traceback + undefined → 2 signals
+    // Single strong signal → coding (errors are strong signals)
+    expect(detectContext('SyntaxError: unexpected token')).toBe('coding');
+    expect(detectContext('Traceback (most recent call last)')).toBe('coding');
+    // Compound: traceback + undefined → 2 signals (strong + weak)
     expect(detectContext('Traceback (most recent call last) undefined')).toBe('coding');
   });
 
@@ -58,21 +58,22 @@ describe('detectContext', () => {
     expect(detectContext('throw an error')).toBe('general');
     // "assert" alone should not match (requires "assert.method()")
     expect(detectContext('assert something')).toBe('general');
-    // Single error name → 1 signal → general
-    expect(detectContext('I got a TypeError yesterday')).toBe('general');
-    // "SyntaxError" without context
-    expect(detectContext('SyntaxError is a common word')).toBe('general');
-    // "Traceback" without context
+    // Single strong signal → coding (TypeError is a strong signal)
+    expect(detectContext('I got a TypeError yesterday')).toBe('coding');
+    // "SyntaxError" alone → strong signal → coding
+    expect(detectContext('SyntaxError is a common word')).toBe('coding');
+    // "Traceback" without parenthesis → doesn't match traceback\s*\( pattern
     expect(detectContext('There was a traceback in the log')).toBe('general');
   });
 
   it('compound patterns still match correctly', () => {
-    // throw new + const → 2 signals
+    // throw new + const → 2 weak signals
     expect(detectContext('throw new Error const x')).toBe('coding');
-    // TypeError + undefined → 2 signals
+    // TypeError (strong) + undefined (weak) → coding
     expect(detectContext('TypeError: undefined is not a function')).toBe('coding');
-    expect(detectContext('SyntaxError: missing ;')).toBe('general');
-    // Compound: traceback + undefined → 2 signals
+    // SyntaxError alone → strong signal → coding
+    expect(detectContext('SyntaxError: missing ;')).toBe('coding');
+    // Compound: traceback (strong) + undefined (weak) → coding
     expect(detectContext('Traceback (most recent call last) undefined')).toBe('coding');
   });
 
@@ -81,6 +82,23 @@ describe('detectContext', () => {
     expect(detectContext('I have [something]() in my list')).toBe('general');
     // "{key: value}" alone should not match
     expect(detectContext('the object {key: value} is here')).toBe('general');
+  });
+
+  it('single strong signals trigger coding', () => {
+    // Package managers
+    expect(detectContext('npm install package')).toBe('coding');
+    // Error patterns
+    expect(detectContext('TypeError: undefined is not a function')).toBe('coding');
+    // Imports
+    expect(detectContext('import React from react')).toBe('coding');
+    // Git
+    expect(detectContext('git commit -m fix')).toBe('coding');
+    // Docker
+    expect(detectContext('docker run myimage')).toBe('coding');
+    // SQL
+    expect(detectContext('select * from users')).toBe('coding');
+    // Shell
+    expect(detectContext('apt install curl')).toBe('coding');
   });
 });
 
