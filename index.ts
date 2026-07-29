@@ -77,10 +77,12 @@ export default function (pi: ExtensionAPI) {
     name: "henyo_search",
     label: "Henyo Search",
     description:
-      "Search the web using DuckDuckGo, Stack Overflow, npm, GitHub, Wikipedia, " +
-      "or Jina. Context-aware routing (coding vs general). Results cached 30 min.",
+      "Search the web for current information. Use proactively whenever the answer may involve recent " +
+      "developments, updated docs, or knowledge beyond your training cutoff. Supports DuckDuckGo, Stack " +
+      "Overflow, npm, GitHub, Wikipedia, Jina. Context-aware routing (coding vs general).",
     promptSnippet:
-      "Search the web. Supports DuckDuckGo, Stack Overflow, npm, GitHub, Wikipedia, Jina. Caching enabled.",
+      "Search the web for current information. Use whenever your training data may be stale. If uncertain " +
+      "about recency, search first.",
     parameters: Type.Object({
       query: Type.String({ description: "Search query" }),
       max: Type.Optional(Type.Integer({
