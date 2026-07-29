@@ -1,5 +1,5 @@
 import type { SearchResult, SearchProvider, ProviderDefinition, ProviderFn, ProviderConfig } from './base';
-import { extractDomain } from './base';
+import { extractDomain, sanitizeQuery } from './base';
 import { searchDuckDuckGo } from './duckduckgo';
 import { searchStackOverflow, StackOverflowAPIError, searchStackOverflowAPI } from './stackoverflow';
 import { searchNpm } from './npm';
@@ -24,6 +24,7 @@ export {
   searchWikipedia,
   searchJina,
   extractDomain,
+  sanitizeQuery,
 };
 
 // ─── Provider map ────────────────────────────────────────────────────────────

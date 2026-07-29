@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from 'vitest';
 import { detectContext, CODING_SIGNALS } from '../../shared/search/context';
-import { PROVIDER_MAP } from '../../shared/search/providers';
+import { PROVIDER_MAP, sanitizeQuery } from '../../shared/search/providers';
 import { extractDomain } from '../../shared/search/providers/base';
 import { searchNpm, searchGitHub, searchWikipedia, searchJina, searchStackOverflowAPI } from '../../shared/search/providers';
 
@@ -266,6 +266,48 @@ describe('extractDomain', () => {
 
   it('returns undefined for empty string', () => {
     expect(extractDomain('')).toBeUndefined();
+  });
+});
+
+describe('sanitizeQuery', () => {
+  it('strips double quotes', () => {
+    expect(sanitizeQuery('"xxx" yyy zzz')).toBe('xxx yyy zzz');
+  });
+
+  it('strips single quotes', () => {
+    expect(sanitizeQuery("it's a test")).toBe('it s a test');
+  });
+
+  it('strips parentheses', () => {
+    expect(sanitizeQuery('error (TypeError)')).toBe('error TypeError');
+  });
+
+  it('strips angle brackets', () => {
+    expect(sanitizeQuery('<div> content </div>')).toBe('div content div');
+  });
+
+  it('strips colons and semicolons', () => {
+    expect(sanitizeQuery('npm install: package;')).toBe('npm install package');
+  });
+
+  it('collapses multiple spaces', () => {
+    expect(sanitizeQuery('hello    world')).toBe('hello world');
+  });
+
+  it('trims leading/trailing whitespace', () => {
+    expect(sanitizeQuery('  hello world  ')).toBe('hello world');
+  });
+
+  it('preserves alphanumerics, hyphens, underscores, dots, plus', () => {
+    expect(sanitizeQuery('my-package_v2.0+build')).toBe('my-package_v2.0+build');
+  });
+
+  it('empty after sanitization returns empty string', () => {
+    expect(sanitizeQuery('""')).toBe('');
+  });
+
+  it('no-op for simple query', () => {
+    expect(sanitizeQuery('hello world')).toBe('hello world');
   });
 });
 

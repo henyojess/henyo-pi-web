@@ -20,7 +20,7 @@ function log(...args: any[]) {
 import { loadConfig, validateConfig } from "./shared/config";
 import { createCache } from "./shared/cache";
 import { detectContext, buildProviderChain } from "./shared/search/context";
-import { PROVIDER_MAP } from "./shared/search/providers";
+import { PROVIDER_MAP, sanitizeQuery } from "./shared/search/providers";
 import type { SearchResult } from "./shared/search/providers";
 import { fetchPage } from "./shared/fetch/pipeline";
 import { formatResults, normalizeUrl, diversifyByDomain, rankResults } from "./shared/format";
@@ -105,6 +105,11 @@ export default function (pi: ExtensionAPI) {
     async execute(_toolCallId, params, signal, onUpdate, _ctx) {
       const { query, max = 10, context = "auto", noCache = false } = params;
       const searchConfig = config["henyo-search"];
+
+      // Sanitize the query for provider APIs (strips quotes/special chars that
+      // break prefix/title searches and registry searches). Raw query is kept
+      // for BM25 ranking so agent intent is still respected in scoring.
+      const sanitizedQuery = sanitizeQuery(query);
       const contextName = context === "auto" ? detectContext(query) : context;
       const providers = buildProviderChain(contextName, searchConfig.contexts || {});
 
@@ -163,9 +168,9 @@ export default function (pi: ExtensionAPI) {
             let results: SearchResult[];
             if (provider.name === 'stackoverflow') {
               const apiKey = searchConfig['api-key'];
-              results = await provider.fn(query, { apiKey }, signal);
+              results = await provider.fn(sanitizedQuery, { apiKey }, signal);
             } else {
-              results = await provider.fn(query, undefined, signal);
+              results = await provider.fn(sanitizedQuery, undefined, signal);
             }
             allResults.push(...results);
             providerResults.push({ name: provider.name, status: 'ok', count: results.length });

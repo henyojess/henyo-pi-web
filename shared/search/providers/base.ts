@@ -33,6 +33,23 @@ export async function withRetry<T>(
   throw lastError;
 }
 
+
+// ─── Query sanitization ────────────────────────────────────
+
+/**
+ * Sanitize a search query for use across search providers.
+ * Strips quotes and special chars that break provider-specific search syntax
+ * (e.g. Wikipedia's prefix search, npm's registry search), while preserving
+ * the raw query for BM25 ranking against result titles/snippets.
+ */
+export function sanitizeQuery(query: string): string {
+  return query
+    .replace(/"/g, '')
+    .replace(/[^a-z0-9+\-_.\s]/gi, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
 // ─── Domain extraction ───────────────────────────────────────────────────────
 
 export function extractDomain(url: string): string | undefined {

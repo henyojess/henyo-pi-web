@@ -1,6 +1,6 @@
 import { pickRandom, delay, USER_AGENTS } from '../../user-agents';
 import { enqueue } from '../queue';
-import { SearchResult, ProviderConfig } from './base';
+import { SearchResult, ProviderConfig, sanitizeQuery } from './base';
 
 // ─── Wikipedia Provider ──────────────────────────────────────────────────────
 
@@ -9,15 +9,9 @@ export async function searchWikipedia(query: string, _config?: ProviderConfig, s
     await delay(1000 + Math.random() * 1500);
 
     try {
-      // Wikipedia's OpenSearch API is a prefix/title search — strip quotes and
-      // special chars that would break prefix matching. Keep the raw query for
-      // BM25 ranking against result titles/snippets so the agent's intent is
-      // still respected in scoring.
-      const wikiQuery = query
-        .replace(/"/g, '')
-        .replace(/[^a-z0-9+\-_.\s]/gi, ' ')
-        .replace(/\s+/g, ' ')
-        .trim();
+      // Wikipedia's OpenSearch API is a prefix/title search — sanitize to
+      // avoid quote/special-char breakage. Raw query is preserved for BM25.
+      const wikiQuery = sanitizeQuery(query);
 
       const searchRes = await fetch(
         `https://en.wikipedia.org/w/api.php?action=opensearch&search=${encodeURIComponent(wikiQuery)}&limit=10&format=json`,
