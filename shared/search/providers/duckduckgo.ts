@@ -1,4 +1,4 @@
-import { pickRandom, delay, USER_AGENTS, ACCEPT_LANGUAGES } from '../../user-agents';
+import { pickRandom, USER_AGENTS, ACCEPT_LANGUAGES } from '../../user-agents';
 import { enqueue } from '../queue';
 import { RateLimitStore, DEFAULT_RATE_LIMIT_COOLDOWNS } from '../../rate-limit';
 import { SearchResult, isCaptchaResponse, withRetry, extractDomain } from './base';
@@ -18,8 +18,6 @@ export async function searchDuckDuckGo(query: string, signal?: AbortSignal): Pro
       'https://html.duckduckgo.com/html/?q=',
       'https://duckduckgo.com/html/?q=',
     ];
-
-    await delay(2000 + Math.random() * 3000);
 
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), 15000);

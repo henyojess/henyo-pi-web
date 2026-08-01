@@ -1,4 +1,4 @@
-import { pickRandom, delay, USER_AGENTS } from '../../user-agents';
+import { pickRandom, USER_AGENTS } from '../../user-agents';
 import { enqueue } from '../queue';
 import { RateLimitStore, DEFAULT_RATE_LIMIT_COOLDOWNS } from '../../rate-limit';
 import { SearchResult, ProviderConfig } from './base';
@@ -64,8 +64,6 @@ export async function searchStackOverflowAPI(query: string, config?: ProviderCon
 const rateLimitStore = new RateLimitStore();
 
 async function searchStackOverflowScraper(query: string, signal?: AbortSignal): Promise<SearchResult[]> {
-  await delay(1500 + Math.random() * 2000);
-
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), 15000);
   signal?.addEventListener('abort', () => {
@@ -117,8 +115,6 @@ async function searchStackOverflowScraper(query: string, signal?: AbortSignal): 
 
 export async function searchStackOverflow(query: string, signal?: AbortSignal): Promise<SearchResult[]> {
   return enqueue('stackoverflow', async () => {
-    await delay(1500 + Math.random() * 2000);
-
     try {
       return await searchStackOverflowAPI(query, undefined, signal);
     } catch (err) {

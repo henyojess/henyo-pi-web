@@ -1,4 +1,4 @@
-import { pickRandom, delay, USER_AGENTS } from '../../user-agents';
+import { pickRandom, USER_AGENTS } from '../../user-agents';
 import { enqueue } from '../queue';
 import { SearchResult } from './base';
 
@@ -6,8 +6,6 @@ import { SearchResult } from './base';
 
 export async function searchGitHub(query: string, signal?: AbortSignal): Promise<SearchResult[]> {
   return enqueue('github', async () => {
-    await delay(1500 + Math.random() * 2000);
-
     try {
       const res = await fetch(`https://api.github.com/search/repositories?q=${encodeURIComponent(query)}&per_page=10`, {
         signal,

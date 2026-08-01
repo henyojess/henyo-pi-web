@@ -1,4 +1,4 @@
-import { pickRandom, delay, USER_AGENTS } from '../../user-agents';
+import { pickRandom, USER_AGENTS } from '../../user-agents';
 import { enqueue } from '../queue';
 import { SearchResult, sanitizeQuery } from './base';
 
@@ -6,8 +6,6 @@ import { SearchResult, sanitizeQuery } from './base';
 
 export async function searchNpm(query: string, signal?: AbortSignal): Promise<SearchResult[]> {
   return enqueue('npm', async () => {
-    await delay(1000 + Math.random() * 1500);
-
     try {
       // npm registry search expects package-name-like input; sanitize to
       // strip quotes/special chars that break registry queries.

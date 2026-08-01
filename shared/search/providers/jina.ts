@@ -1,17 +1,20 @@
 import fs from 'node:fs';
-import { pickRandom, delay, USER_AGENTS } from '../../user-agents';
+import { pickRandom, USER_AGENTS } from '../../user-agents';
 import { enqueue } from '../queue';
 import { SearchResult } from './base';
 
-const TRACE_FILE = '/tmp/jina-trace.log';
-function trace(msg: string) { fs.appendFileSync(TRACE_FILE, `[${new Date().toISOString()}] ${msg}\n`); }
+let _debugEnabled = false;
+
+function trace(msg: string) {
+  if (_debugEnabled) {
+    fs.appendFileSync('/tmp/jina-trace.log', `[${new Date().toISOString()}] ${msg}\n`);
+  }
+}
 
 // ─── Jina Search Provider ────────────────────────────────────────────────────
 
 export async function searchJina(query: string, signal?: AbortSignal): Promise<SearchResult[]> {
   return enqueue('jina', async () => {
-    await delay(1000 + Math.random() * 1500);
-
     try {
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), 20000);

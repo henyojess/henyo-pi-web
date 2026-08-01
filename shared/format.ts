@@ -97,15 +97,34 @@ export function rankResults(query: string, results: SearchResult[]): SearchResul
   const k1 = 1.5;
   const b = 0.75;
 
-  // First pass: collect token sets per result, compute df
-  const resultTokenSets: Set<string>[] = [];
+  interface ResultTokens {
+    titleTokens: string[];
+    snippetTokens: string[];
+    tokenSet: Set<string>;
+    titleCountMap: Map<string, number>;
+    snippetCountMap: Map<string, number>;
+  }
+
+  // First pass: collect token data per result, compute df
+  const resultTokens: ResultTokens[] = [];
   for (let i = 0; i < N; i++) {
     const r = results[i];
     const titleTokens = tokenize(r.title);
     const snippetTokens = tokenize(r.snippet || '');
     const allTokens = [...titleTokens, ...snippetTokens];
     const tokenSet = new Set(allTokens);
-    resultTokenSets.push(tokenSet);
+
+    // Pre-build term-count Maps for O(1) lookup
+    const titleCountMap = new Map<string, number>();
+    for (const t of titleTokens) {
+      titleCountMap.set(t, (titleCountMap.get(t) ?? 0) + 1);
+    }
+    const snippetCountMap = new Map<string, number>();
+    for (const t of snippetTokens) {
+      snippetCountMap.set(t, (snippetCountMap.get(t) ?? 0) + 1);
+    }
+
+    resultTokens.push({ titleTokens, snippetTokens, tokenSet, titleCountMap, snippetCountMap });
 
     for (const term of queryTerms) {
       if (tokenSet.has(term)) {
@@ -114,13 +133,14 @@ export function rankResults(query: string, results: SearchResult[]): SearchResul
     }
   }
 
-  // Second pass: score each result
+  // Second pass: score each result (reuse token data from pass 1)
   for (let i = 0; i < N; i++) {
     const r = results[i];
-    const titleTokens = tokenize(r.title);
-    const snippetTokens = tokenize(r.snippet || '');
+    const rt = resultTokens[i]!;
+    const titleTokens = rt.titleTokens;
+    const snippetTokens = rt.snippetTokens;
     const allTokens = [...titleTokens, ...snippetTokens];
-    const tokenSet = resultTokenSets[i]!;
+    const tokenSet = rt.tokenSet;
     const len = allTokens.length || 1;
 
     let score = 0;
@@ -130,21 +150,15 @@ export function rankResults(query: string, results: SearchResult[]): SearchResul
       // Smoothed corpus-level IDF
       const idf = Math.log(1 + (N - df + 0.5) / (df + 0.5));
 
-      // TF in title (weighted 2x)
-      let titleCount = 0;
-      for (const t of titleTokens) {
-        if (t === term) titleCount++;
-      }
+      // TF in title (weighted 2x) — O(1) map lookup
+      const titleCount = rt.titleCountMap.get(term) ?? 0;
       if (titleCount > 0) {
         const tf = titleCount / (titleCount + k1 * (1 - b + b * (titleTokens.length / len)));
         score += tf * idf * 2.0;
       }
 
-      // TF in snippet
-      let snippetCount = 0;
-      for (const t of snippetTokens) {
-        if (t === term) snippetCount++;
-      }
+      // TF in snippet — O(1) map lookup
+      const snippetCount = rt.snippetCountMap.get(term) ?? 0;
       if (snippetCount > 0) {
         const tf = snippetCount / (snippetCount + k1 * (1 - b + b * (snippetTokens.length / len)));
         score += tf * idf;
@@ -191,18 +205,25 @@ export function diversifyByDomain(results: SearchResult[], maxPerDomain = 2): Se
 
   // If we still have room, take remaining from any domain
   if (capped.length < maxPerDomain * 10 && results.length > capped.length) {
-    const relaxed = new Map<string, number>();
+    // Single Map tracks count per domain; inclusion tracked by index scan
+    const domainCount = new Map<string, number>();
     for (const r of capped) {
       const domain = r.domain || '__no_domain__';
-      relaxed.set(domain, (relaxed.get(domain) || 0) + 1);
+      domainCount.set(domain, (domainCount.get(domain) || 0) + 1);
     }
-    for (const r of results) {
-      if (capped.includes(r)) continue;
+    for (let i = 0; i < results.length; i++) {
+      const r = results[i]!;
+      // Check inclusion by index (avoids Set allocation)
+      let included = false;
+      for (let j = 0; j < capped.length; j++) {
+        if (capped[j] === r) { included = true; break; }
+      }
+      if (included) continue;
       const domain = r.domain || '__no_domain__';
-      const count = relaxed.get(domain) || 0;
+      const count = domainCount.get(domain) || 0;
       if (count < maxPerDomain * 3) { // Allow up to 3x per domain when relaxing
         capped.push(r);
-        relaxed.set(domain, count + 1);
+        domainCount.set(domain, count + 1);
       }
     }
   }
