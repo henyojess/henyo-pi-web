@@ -18,6 +18,7 @@ export async function searchStackOverflowAPI(query: string, config?: ProviderCon
   const apiKey = config?.apiKey as string | undefined;
   const params = new URLSearchParams({
     q: query,
+    intitle: query,
     order: 'desc',
     sort: 'relevance',
     site: 'stackoverflow',
@@ -64,6 +65,29 @@ export async function searchStackOverflowAPI(query: string, config?: ProviderCon
 const rateLimitStore = new RateLimitStore();
 
 async function searchStackOverflowScraper(query: string, signal?: AbortSignal): Promise<SearchResult[]> {
+  const url = `https://stackoverflow.com/search?q=${encodeURIComponent(query)}`;
+
+  // Method 1: Try Jina Reader (handles Cloudflare)
+  try {
+    const jinaRes = await fetch(`https://r.jina.ai/${url}`, {
+      signal,
+      headers: {
+        'User-Agent': pickRandom(USER_AGENTS),
+        'Accept': 'text/plain',
+        'X-Return-Format': 'text',
+      },
+    });
+
+    if (jinaRes.ok) {
+      const text = await jinaRes.text();
+      const results = parseJinaHtml(text, url);
+      if (results.length > 0) return results;
+    }
+  } catch {
+    // Jina failed, continue to fallback
+  }
+
+  // Method 2: Plain fetch with HTML parsing (may be blocked by Cloudflare)
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), 15000);
   signal?.addEventListener('abort', () => {
@@ -71,41 +95,110 @@ async function searchStackOverflowScraper(query: string, signal?: AbortSignal): 
     controller.abort();
   }, { once: true });
 
-  const url = `https://stackoverflow.com/search?q=${encodeURIComponent(query)}`;
-  const res = await fetch(url, {
-    signal: controller.signal,
-    headers: {
-      'User-Agent': pickRandom(USER_AGENTS),
-      'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
-    },
-  });
+  try {
+    const res = await fetch(url, {
+      signal: controller.signal,
+      headers: {
+        'User-Agent': pickRandom(USER_AGENTS),
+        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+      },
+    });
 
-  if (!res.ok) return [];
-  const html = await res.text();
+    if (!res.ok) return [];
+    const html = await res.text();
+    return parseHtmlResults(html);
+  } catch {
+    return [];
+  }
+}
 
+function parseJinaHtml(text: string, baseUrl: string): SearchResult[] {
   const results: SearchResult[] = [];
-  const questions = html.match(/<div class="s-prose js-post-body[^"]*"[^>]*>([\s\S]*?)<\/div>\s*<\/div>\s*<\/div>/g);
-  if (!questions) return [];
 
-  for (const question of questions.slice(0, 10)) {
-    const titleMatch = question.match(/class="s-link"[^>]*href="([^"]*)"[^>]*>([\s\S]*?)<\/a>/);
-    if (titleMatch) {
-      let url = titleMatch[1];
-      if (url.startsWith('/')) url = 'https://stackoverflow.com' + url;
-      let title = titleMatch[2].replace(/<[^>]+>/g, ' ').trim();
-      if (!title) continue;
+  // Jina returns extracted content; look for SO question patterns
+  // Jina formats links as markdown: [title](url)
+  const linkRegex = /\[([^\]]+)\]\(([^)]+)\)/g;
+  let match;
+  const seen = new Set<string>();
 
-      const snippetMatch = question.match(/<p[^>]*class="[^"]*"[^>]*>([\s\S]*?)<\/p>/);
-      const snippet = snippetMatch ? snippetMatch[1].replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim().substring(0, 200) : '';
+  while ((match = linkRegex.exec(text)) !== null) {
+    let title = match[1].replace(/<[^>]+>/g, ' ').trim();
+    let linkUrl = match[2];
 
-      results.push({
-        title: title.substring(0, 200),
-        url: url.split('?')[0],
-        snippet,
-        source: 'stackoverflow',
-        domain: 'stackoverflow.com',
-      });
-    }
+    if (!title || !linkUrl) continue;
+
+    // Only include SO question links
+    if (!linkUrl.includes('stackoverflow.com')) continue;
+
+    // Normalize relative URLs
+    if (linkUrl.startsWith('/')) linkUrl = 'https://stackoverflow.com' + linkUrl;
+
+    // Deduplicate
+    const cleanUrl = linkUrl.split('?')[0];
+    if (seen.has(cleanUrl)) continue;
+    seen.add(cleanUrl);
+
+    if (title.length > 200) title = title.substring(0, 200);
+
+    results.push({
+      title,
+      url: cleanUrl,
+      snippet: '',
+      source: 'stackoverflow',
+      domain: 'stackoverflow.com',
+    });
+
+    if (results.length >= 10) break;
+  }
+
+  return results;
+}
+
+function parseHtmlResults(html: string): SearchResult[] {
+  const results: SearchResult[] = [];
+
+  // Match SO question blocks: div.s-prose.js-post-body containing a.s-link
+  const questionRegex = /<div class="s-prose js-post-body[^"]*"[^>]*>([\s\S]*?)<\/div>\s*<\/div>\s*<\/div>/g;
+  let questionMatch;
+  const seen = new Set<string>();
+
+  while ((questionMatch = questionRegex.exec(html)) !== null) {
+    const block = questionMatch[1];
+
+    // Extract link: <a class="s-link" href="/questions/...">Title</a>
+    const linkRegex = /class="s-link"[^>]*href="([^"]*)"[^>]*>([\s\S]*?)<\/a>/;
+    const linkMatch = linkRegex.exec(block);
+    if (!linkMatch) continue;
+
+    let url = linkMatch[1];
+    if (url.startsWith('/')) url = 'https://stackoverflow.com' + url;
+
+    let title = linkMatch[2].replace(/<[^>]+>/g, ' ').trim();
+    if (!title) continue;
+
+    // Deduplicate
+    const cleanUrl = url.split('?')[0];
+    if (seen.has(cleanUrl)) continue;
+    seen.add(cleanUrl);
+
+    if (title.length > 200) title = title.substring(0, 200);
+
+    // Extract snippet from <p> tags
+    const snippetRegex = /<p[^>]*class="[^"]*"[^>]*>([\s\S]*?)<\/p>/;
+    const snippetMatch = snippetRegex.exec(block);
+    const snippet = snippetMatch
+      ? snippetMatch[1].replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim().substring(0, 200)
+      : '';
+
+    results.push({
+      title,
+      url: cleanUrl,
+      snippet,
+      source: 'stackoverflow',
+      domain: 'stackoverflow.com',
+    });
+
+    if (results.length >= 10) break;
   }
 
   return results;

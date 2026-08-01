@@ -156,6 +156,16 @@ export const SO_HTML_LONG_TITLE = `
 </div>
 `;
 
+export const SO_JINA_HTML_WITH_RESULTS = `
+[Test Question Title](https://stackoverflow.com/questions/12345/test-question)
+This is a test question description with some details.
+
+[Another Question](https://stackoverflow.com/questions/67890/another-question)
+Description of another question here.
+`;
+
+export const SO_JINA_HTML_NO_RESULTS = `No stackoverflow links found in this content.`;
+
 // npm / GitHub
 export const NPM_RESPONSE = JSON.stringify({
   objects: [
