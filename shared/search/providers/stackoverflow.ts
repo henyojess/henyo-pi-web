@@ -115,13 +115,12 @@ async function searchStackOverflowScraper(query: string, signal?: AbortSignal): 
 
 // ─── StackOverflow Provider ──────────────────────────────────────────────────
 
-export async function searchStackOverflow(query: string, config?: ProviderConfig, signal?: AbortSignal): Promise<SearchResult[]> {
-  const apiKey = config?.apiKey as string | undefined;
+export async function searchStackOverflow(query: string, signal?: AbortSignal): Promise<SearchResult[]> {
   return enqueue('stackoverflow', async () => {
     await delay(1500 + Math.random() * 2000);
 
     try {
-      return await searchStackOverflowAPI(query, config, signal);
+      return await searchStackOverflowAPI(query, undefined, signal);
     } catch (err) {
       if (err instanceof StackOverflowAPIError) {
         rateLimitStore.setCooldown('stackoverflow', DEFAULT_RATE_LIMIT_COOLDOWNS.stackoverflow);

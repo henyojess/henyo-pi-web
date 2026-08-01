@@ -79,7 +79,7 @@ export interface ProviderConfig {
 }
 
 /** Provider search function — each provider defines its own signature */
-export type ProviderFn = (query: string, config?: ProviderConfig, signal?: AbortSignal) => Promise<SearchResult[]>;
+export type ProviderFn = (query: string, signal?: AbortSignal) => Promise<SearchResult[]>;
 
 /** A provider with a name and a search function */
 export interface ProviderDefinition {

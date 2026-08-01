@@ -1,14 +1,14 @@
 import { pickRandom, delay, USER_AGENTS, ACCEPT_LANGUAGES } from '../../user-agents';
 import { enqueue } from '../queue';
 import { RateLimitStore, DEFAULT_RATE_LIMIT_COOLDOWNS } from '../../rate-limit';
-import { SearchResult, ProviderConfig, isCaptchaResponse, withRetry, extractDomain } from './base';
+import { SearchResult, isCaptchaResponse, withRetry, extractDomain } from './base';
 import { shouldTrace, traceLog } from '../trace';
 
 // ─── DuckDuckGo Provider ─────────────────────────────────────────────────────
 
 const rateLimitStore = new RateLimitStore();
 
-export async function searchDuckDuckGo(query: string, _config?: ProviderConfig, signal?: AbortSignal): Promise<SearchResult[]> {
+export async function searchDuckDuckGo(query: string, signal?: AbortSignal): Promise<SearchResult[]> {
   const startTime = Date.now();
   const traceConfig = (globalThis as any).__henyoTraceConfig;
   const traceEnabled = shouldTrace(traceConfig, 'duckduckgo');

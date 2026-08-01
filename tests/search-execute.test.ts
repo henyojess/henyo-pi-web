@@ -5,6 +5,7 @@ import { searchWikipedia } from '../shared/search/providers/wikipedia';
 import { searchStackOverflow } from '../shared/search/providers/stackoverflow';
 import { searchNpm } from '../shared/search/providers/npm';
 import { searchGitHub } from '../shared/search/providers/github';
+import { createSearchExecute } from '../shared/search/execute';
 import { rankResults, diversifyByDomain } from '../shared/format';
 
 vi.mock('../shared/user-agents', async (importOriginal) => {
@@ -263,39 +264,6 @@ describe('diversifyByDomain', () => {
 
 // ─── Test: abort signal handling (execute pipeline behavior) ─────────────────
 
-/** Minimal execute pipeline clone for testing abort behavior */
-async function executePipeline(
-  providerFn: (query: string, config?: any, signal?: AbortSignal) => Promise<SearchResult[]>,
-  params: { query: string; max?: number; toolName?: string },
-  signal: AbortSignal | undefined,
-): Promise<{ content: { type: string; text: string }[]; details: Record<string, unknown> }> {
-  const { query, max = 10, toolName = 'test' } = params;
-  const results = await providerFn(query, undefined, signal);
-  const ranked = rankResults(query, results);
-  const diversified = diversifyByDomain(ranked, 2);
-
-  const providerResults: Array<{ name: string; status: 'ok' | 'error' }> = [
-    { name: toolName, status: 'ok' as const },
-  ];
-
-  // Abort check — matches the execute pipeline behavior
-  if (signal?.aborted) {
-    return {
-      content: [{ type: 'text', text: diversified.length > 0 ? diversifyByDomain(diversified, 10).map(r => r.title).join('\n') : 'Search cancelled' }],
-      details: { count: diversified.length, aborted: true, providers: providerResults },
-    };
-  }
-
-  if (diversified.length === 0) {
-    return { content: [{ type: 'text', text: 'No results found.' }], details: { count: 0, providers: providerResults } };
-  }
-
-  return {
-    content: [{ type: 'text', text: diversified.slice(0, max).map(r => r.title).join('\n') }],
-    details: { count: diversified.slice(0, max).length, providers: providerResults },
-  };
-}
-
 describe('abort signal handling', () => {
   it('returns partial results with aborted flag when signal is aborted', async () => {
     const mockProvider = vi.fn().mockResolvedValue([
@@ -305,7 +273,8 @@ describe('abort signal handling', () => {
     const controller = new AbortController();
     controller.abort();
 
-    const result = await executePipeline(mockProvider, { query: 'test', toolName: 'search_test' }, controller.signal);
+    const executor = createSearchExecute(mockProvider, 'search_test', false);
+    const result = await executor('toolCallId', { query: 'test', noCache: true }, controller.signal, undefined, {});
 
     expect(result.details).toHaveProperty('aborted', true);
     expect(result.details).toHaveProperty('count', 1);
@@ -317,7 +286,8 @@ describe('abort signal handling', () => {
     const controller = new AbortController();
     controller.abort();
 
-    const result = await executePipeline(mockProvider, { query: 'test', toolName: 'search_test' }, controller.signal);
+    const executor = createSearchExecute(mockProvider, 'search_test', false);
+    const result = await executor('toolCallId', { query: 'test', noCache: true }, controller.signal, undefined, {});
 
     expect(result.details).toHaveProperty('aborted', true);
     expect(result.details).toHaveProperty('count', 0);
@@ -330,7 +300,8 @@ describe('abort signal handling', () => {
 
     const controller = new AbortController();
 
-    const result = await executePipeline(mockProvider, { query: 'test', toolName: 'search_test' }, controller.signal);
+    const executor = createSearchExecute(mockProvider, 'search_test', false);
+    const result = await executor('toolCallId', { query: 'test', noCache: true }, controller.signal, undefined, {});
 
     expect(result.details).not.toHaveProperty('aborted');
     expect(result.details).toHaveProperty('count', 1);
@@ -346,7 +317,8 @@ describe('provider status tracking', () => {
     ] as SearchResult[]);
 
     const controller = new AbortController();
-    const result = await executePipeline(mockProvider, { query: 'test', toolName: 'search_test' }, controller.signal);
+    const executor = createSearchExecute(mockProvider, 'search_test', false);
+    const result = await executor('toolCallId', { query: 'test' }, controller.signal, undefined, {});
 
     expect(result.details).toHaveProperty('providers');
     const providers = result.details.providers as Array<{ name: string; status: string }>;
@@ -363,7 +335,8 @@ describe('provider status tracking', () => {
     const controller = new AbortController();
     controller.abort();
 
-    const result = await executePipeline(mockProvider, { query: 'test', toolName: 'search_test' }, controller.signal);
+    const executor = createSearchExecute(mockProvider, 'search_test', false);
+    const result = await executor('toolCallId', { query: 'test' }, controller.signal, undefined, {});
 
     const providers = result.details.providers as Array<{ name: string; status: string }>;
     expect(providers).toHaveLength(1);
@@ -375,7 +348,8 @@ describe('provider status tracking', () => {
     const mockProvider = vi.fn().mockResolvedValue([] as SearchResult[]);
 
     const controller = new AbortController();
-    const result = await executePipeline(mockProvider, { query: 'test', toolName: 'search_test' }, controller.signal);
+    const executor = createSearchExecute(mockProvider, 'search_test', false);
+    const result = await executor('toolCallId', { query: 'test' }, controller.signal, undefined, {});
 
     const providers = result.details.providers as Array<{ name: string; status: string }>;
     expect(providers).toHaveLength(1);

@@ -327,7 +327,7 @@ describe('AbortSignal propagation', () => {
     });
 
     const controller = new AbortController();
-    await searchNpm('test', undefined, controller.signal);
+    await searchNpm('test', controller.signal);
     expect(receivedSignal).toBe(controller.signal);
   });
 
@@ -342,7 +342,7 @@ describe('AbortSignal propagation', () => {
     });
 
     const controller = new AbortController();
-    await searchGitHub('test', undefined, controller.signal);
+    await searchGitHub('test', controller.signal);
     expect(receivedSignal).toBe(controller.signal);
   });
 
@@ -357,7 +357,7 @@ describe('AbortSignal propagation', () => {
     });
 
     const controller = new AbortController();
-    await searchWikipedia('test', undefined, controller.signal);
+    await searchWikipedia('test', controller.signal);
     expect(receivedSignal).toBe(controller.signal);
   });
 
@@ -371,7 +371,7 @@ describe('AbortSignal propagation', () => {
 
     const controller = new AbortController();
     // Should not throw — signal is connected to internal controller
-    const results = await searchJina('test', undefined, controller.signal);
+    const results = await searchJina('test', controller.signal);
     expect(results.length).toBeGreaterThan(0);
   });
 
