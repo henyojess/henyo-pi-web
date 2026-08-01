@@ -21,6 +21,7 @@ export async function searchGitHub(query: string, _config?: ProviderConfig, sign
         title: `${item.owner.login}/${item.name} (${item.language || 'unknown'})`,
         url: item.html_url,
         snippet: item.description || 'No description',
+        domain: 'github.com',
         source: 'github',
       }));
     } catch {

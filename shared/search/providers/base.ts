@@ -67,6 +67,7 @@ export interface SearchResult {
   title: string;
   url: string;
   snippet: string;
+  domain?: string;
   source?: string;
 }
 

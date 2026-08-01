@@ -19,12 +19,15 @@ function log(...args: any[]) {
 
 import { loadConfig, validateConfig } from "./shared/config";
 import { createCache } from "./shared/cache";
-import { detectContext, buildProviderChain } from "./shared/search/context";
-import { PROVIDER_MAP, sanitizeQuery } from "./shared/search/providers";
-import type { SearchResult } from "./shared/search/providers";
+import { sanitizeQuery } from "./shared/search/providers/base";
+import type { SearchResult } from "./shared/search/providers/base";
+import { searchDuckDuckGo } from "./shared/search/providers/duckduckgo";
+import { searchWikipedia } from "./shared/search/providers/wikipedia";
+import { searchStackOverflow } from "./shared/search/providers/stackoverflow";
+import { searchNpm } from "./shared/search/providers/npm";
+import { searchGitHub } from "./shared/search/providers/github";
 import { fetchPage } from "./shared/fetch/pipeline";
-import { formatResults, normalizeUrl, diversifyByDomain, rankResults } from "./shared/format";
-import type { FetchErrorCategory } from "./shared/fetch/pipeline";
+import { formatResults, rankResults, diversifyByDomain } from "./shared/format";
 
 function getCacheDir(subdir: string): string {
   const home = process.env.HOME || process.env.USERPROFILE;
@@ -32,31 +35,6 @@ function getCacheDir(subdir: string): string {
     console.warn('[henyo-search] HOME is undefined, using USERPROFILE for cache path');
   }
   return `${home}/.pi/tools-cache/${subdir}`;
-}
-
-// ─── TUI rendering helpers ───────────────────────────────────────────────────
-
-function buildCollapsedHeader(details: { query?: string; context?: string; count?: number; providers?: Array<{ name: string; status: string; error?: string; count?: number }> }, theme: Theme): string {
-  const context = details.context ?? 'general';
-  const count = details.count ?? 0;
-
-  if (details.providers && details.providers.length > 0) {
-    const sorted = [...details.providers].sort((a, b) => (b.count ?? 0) - (a.count ?? 0));
-    const providerParts = sorted.map(p => {
-      if (p.status === 'error') {
-        return `${theme.fg('error', `${p.name}(error)`)}`;
-      }
-      return `${theme.fg('muted', `${p.name}:${p.count ?? 0}`)}`;
-    });
-    return `${theme.fg('muted', `${context}(${count}) · ${providerParts.join(' ')}`)}`;
-  }
-
-  return theme.fg('muted', `${context}(${count})`);
-}
-
-function buildExpandedContent(result: { content: Array<{ type: string; text: string }> }): string {
-  const textContent = result.content.find(c => c.type === 'text');
-  return textContent?.text ?? '';
 }
 
 export default function (pi: ExtensionAPI) {
@@ -72,182 +50,296 @@ export default function (pi: ExtensionAPI) {
     };
   });
 
-  // --- henyo_search tool ---
+  // ─── Helper: common cache dir ──────────────────────────────────────────────
+  function getSearchCacheDir(toolName: string): string {
+    return getCacheDir(toolName);
+  }
+
+  // ─── Helper: shared search execute logic ───────────────────────────────────
+  export function createSearchExecute(
+    providerFn: (query: string, config?: any, signal?: AbortSignal) => Promise<SearchResult[]>,
+    toolName: string,
+    needsSanitization: boolean,
+  ) {
+    return async (_toolCallId: string, params: { query: string; max?: number; noCache?: boolean }, signal: AbortSignal | undefined, _onUpdate: any, _ctx: any) => {
+      const { query, max = 10, noCache = false } = params;
+
+      const cache = createCache<SearchResult[]>(
+        getSearchCacheDir(toolName),
+        1800,
+      );
+
+      const cacheKey = `search:${toolName}:${query}`;
+      if (!noCache) {
+        const cached = cache.get(cacheKey);
+        if (cached) {
+          return {
+            content: [{ type: "text", text: `[cache hit — ${cached.length} results]\n\n${formatResults(cached)}` }],
+            details: { cached: true, count: cached.length, providers: [{ name: toolName, status: 'ok' as const }] },
+          };
+        }
+      }
+
+      // Sanitize or pass raw query depending on provider
+      const searchQuery = needsSanitization ? sanitizeQuery(query) : query;
+
+      const providerResults: Array<{ name: string; status: 'ok' | 'error' }> = [];
+      let results: SearchResult[];
+      try {
+        results = await providerFn(searchQuery, undefined, signal);
+        providerResults.push({ name: toolName, status: 'ok' });
+      } catch (err: any) {
+        providerResults.push({ name: toolName, status: 'error' });
+        return {
+          content: [{ type: "text", text: "No results found." }],
+          details: { count: 0, providers: providerResults },
+        };
+      }
+
+      // Apply BM25 ranking and domain diversification before slicing
+      const ranked = rankResults(query, results);
+      const diversified = diversifyByDomain(ranked, 2);
+
+      // Check for abort — return partial results if signal was triggered
+      if (signal?.aborted) {
+        return {
+          content: [{ type: "text", text: diversified.length > 0 ? formatResults(diversified.slice(0, max)) : "Search cancelled" }],
+          details: { count: diversified.length, aborted: true, providers: providerResults },
+        };
+      }
+
+      if (!noCache) {
+        cache.put(cacheKey, results);
+      }
+
+      if (diversified.length === 0) {
+        return {
+          content: [{ type: "text", text: "No results found." }],
+          details: { count: 0, providers: providerResults },
+        };
+      }
+
+      const sliced = diversified.slice(0, max);
+      return {
+        content: [{ type: "text", text: formatResults(sliced) }],
+        details: { count: sliced.length, providers: providerResults },
+      };
+    };
+  }
+
+  // ─── search_ddg tool ──────────────────────────────────────────────────────
   pi.registerTool({
-    name: "henyo_search",
-    label: "Henyo Search",
+    name: "search_ddg",
+    label: "Search DuckDuckGo",
     description:
-      "Search the web for current information. Use proactively whenever the answer may involve recent " +
-      "developments, updated docs, or knowledge beyond your training cutoff. Supports DuckDuckGo, Stack " +
-      "Overflow, npm, GitHub, Wikipedia, Jina. Context-aware routing (coding vs general).",
+      "General web search via DuckDuckGo. Query with any topic, question, or phrase. " +
+      "Use for news, articles, broad topics, and as a fallback when no specialized provider fits.",
     promptSnippet:
-      "Search the web for current information. Use whenever your training data may be stale. If uncertain " +
-      "about recency, search first.",
+      "Search DuckDuckGo for general web results. Use for news, articles, and broad topics.",
     parameters: Type.Object({
-      query: Type.String({ description: "Search query" }),
+      query: Type.String({ description: "Search query (any topic or phrase)" }),
       max: Type.Optional(Type.Integer({
         default: 10, minimum: 1, maximum: 50,
         description: "Max results to return",
-      })),
-      context: Type.Optional(Type.Union([
-        Type.Literal("coding"),
-        Type.Literal("general"),
-        Type.Literal("auto"),
-      ], {
-        default: "auto",
-        description: "Context: coding (SO, npm, GitHub), general (DDG, Wikipedia), or auto-detect"
       })),
       noCache: Type.Optional(Type.Boolean({
         default: false,
         description: "Skip cache",
       })),
     }),
-    async execute(_toolCallId, params, signal, onUpdate, _ctx) {
-      const { query, max = 10, context = "auto", noCache = false } = params;
-      const searchConfig = config["henyo-search"];
-
-      // Sanitize the query for provider APIs (strips quotes/special chars that
-      // break prefix/title searches and registry searches). Raw query is kept
-      // for BM25 ranking so agent intent is still respected in scoring.
-      const sanitizedQuery = sanitizeQuery(query);
-      const contextName = context === "auto" ? detectContext(query) : context;
-      const providers = buildProviderChain(contextName, searchConfig.contexts || {});
-
-      if (providers.length === 0) {
-        throw new Error(`No providers configured for context: ${contextName}`);
-      }
-
-      const cache = createCache<SearchResult[]>(
-        getCacheDir('henyo_search'),
-        1800,
-      );
-
-      // Per-context ranking config (default true)
-      const contextConfig = searchConfig.contexts?.[contextName] || {};
-      const rankingEnabled = contextConfig.ranking ?? true;
-
-      const cacheKey = `search:${contextName}:${query}`;
-      if (!noCache) {
-        const cached = cache.get(cacheKey);
-        if (cached) {
-          return {
-            content: [{ type: "text", text: `[cache hit — ${cached.length} results]\n\n${formatResults(cached)}` }],
-            details: { cached: true, count: cached.length },
-          };
-        }
-      }
-
-      // Run providers sequentially by priority group
-      const priorities = [...new Set(providers.map(p => p.priority))].sort((a, b) => a - b);
-      const allResults: SearchResult[] = [];
-      const providerResults: Array<{ name: string; status: 'ok' | 'error' | 'timeout' | 'cooldown'; error?: string }> = [];
-
-      for (const priority of priorities) {
-        if (signal?.aborted) {
-          // Return partial results on abort
-          const partial = allResults.slice(0, max);
-          if (partial.length > 0) {
-            const diversified = diversifyByDomain(partial, 2);
-            return {
-              content: [{ type: "text", text: formatResults(diversified) }],
-              details: { count: diversified.length, context: contextName, providers: providerResults.map(p => ({ name: p.name, status: p.status, error: p.error, count: (p as any).count })), aborted: true },
-            };
-          }
-          return { content: [{ type: "text", text: "Search cancelled" }], details: { count: 0, context: contextName, providers: providerResults.map(p => ({ name: p.name, status: p.status, error: p.error, count: (p as any).count })), aborted: true } };
-        }
-
-        const group = providers.filter(p => p.priority === priority);
-        for (const provider of group) {
-          if (signal?.aborted) {
-            providerResults.push({ name: provider.name, status: 'timeout' });
-            continue;
-          }
-
-          try {
-            // Provider-specific config
-            let results: SearchResult[];
-            if (provider.name === 'stackoverflow') {
-              const apiKey = searchConfig['api-key'];
-              results = await provider.fn(sanitizedQuery, { apiKey }, signal);
-            } else {
-              results = await provider.fn(sanitizedQuery, undefined, signal);
-            }
-            allResults.push(...results);
-            providerResults.push({ name: provider.name, status: 'ok', count: results.length });
-          } catch (err: any) {
-            providerResults.push({ name: provider.name, status: 'error', error: err.message || String(err) });
-          }
-        }
-
-        // Deduplicate
-        const seen = new Set<string>();
-        const deduped: SearchResult[] = [];
-        for (const r of allResults) {
-          const key = normalizeUrl(r.url);
-          if (!seen.has(key)) { seen.add(key); deduped.push(r); }
-        }
-        allResults.length = 0;
-        allResults.push(...deduped);
-
-        // Rank results within this priority group (corpus-level BM25)
-        if (rankingEnabled) {
-          const ranked = rankResults(query, allResults);
-          allResults.length = 0;
-          allResults.push(...ranked);
-        }
-      }
-
-      const diversified = diversifyByDomain(allResults, 2);
-      const results = diversified.slice(0, max);
-
-      if (!noCache) {
-        cache.put(cacheKey, results);
-      }
-
-      if (results.length === 0) {
-        return {
-          content: [{ type: "text", text: "No results found." }],
-          details: { count: 0, context: contextName, providers: providerResults.map(p => ({ name: p.name, status: p.status, error: p.error, count: (p as any).count })) },
-        };
-      }
-
-      return {
-        content: [{ type: "text", text: formatResults(results) }],
-        details: { count: results.length, context: contextName, providers: providerResults.map(p => ({ name: p.name, status: p.status, error: p.error, count: (p as any).count })) },
-      };
-    },
+    execute: createSearchExecute(searchDuckDuckGo, "search_ddg", false),
     renderCall(args, theme) {
-      return new Text(theme.fg("toolTitle", "henyo_search ") + theme.fg("muted", `"${args.query}"`), 0, 0);
+      return new Text(theme.fg("toolTitle", "search_ddg ") + theme.fg("muted", `"${args.query}"`), 0, 0);
     },
     renderResult(result, { expanded, isPartial }, theme, context) {
-      // Show processing state for partial results
       if (isPartial) {
         return new Text(theme.fg("muted", "Processing..."), 0, 0);
       }
-
-      // Build header with query, context, count, and provider breakdown
       const details = (result.details as any) || {};
-      const providers = details.providers || [];
-      // Use the post-slice count from execute() — accurate after dedup/rank/diversify/max
-      const count = details.count ?? providers.reduce((sum: number, p: any) => sum + (p.count ?? 0), 0);
-      let header = buildCollapsedHeader({
-        query: context?.args?.query ?? details.query ?? '',
-        context: details.context,
-        count: count,
-        providers: providers,
-      }, theme);
-
+      const count = details.count ?? 0;
+      let header = theme.fg("muted", `ddg(${count})`);
       if (expanded) {
-        // Append full content text with collapse hint
-        const expandedText = buildExpandedContent(result);
-        if (expandedText) {
-          header = `${expandedText}\n\n(${theme.fg("muted", "press " + keyHint("app.tools.expand", "to collapse"))})`;
+        const textContent = result.content?.find(c => c.type === 'text');
+        if (textContent?.text) {
+          header = `${textContent.text}\n\n(${theme.fg("muted", "press " + keyHint("app.tools.expand", "to collapse"))})`;
         }
       } else {
-        // Show key hint so users know how to expand
         header = `${header}\n(${theme.fg("muted", "press " + keyHint("app.tools.expand", "to expand"))})`;
       }
+      return new Text(header, 0, 0);
+    },
+  });
 
+  // ─── search_wikipedia tool ────────────────────────────────────────────────
+  pi.registerTool({
+    name: "search_wikipedia",
+    label: "Search Wikipedia",
+    description:
+      "Search Wikipedia for encyclopedia knowledge. Query with short topic names (e.g. 'React', 'Kubernetes', 'Machine Learning'), " +
+      "not full questions. Use for definitions, concepts, history, and factual background.",
+    promptSnippet:
+      "Search Wikipedia for encyclopedia knowledge. Use short topic names, not full questions.",
+    parameters: Type.Object({
+      query: Type.String({ description: "Short topic name (e.g. 'React', 'Kubernetes')" }),
+      max: Type.Optional(Type.Integer({
+        default: 10, minimum: 1, maximum: 50,
+        description: "Max results to return",
+      })),
+      noCache: Type.Optional(Type.Boolean({
+        default: false,
+        description: "Skip cache",
+      })),
+    }),
+    // Wikipedia sanitizes internally (strips HTML, limits extract length), so outer sanitization is redundant
+    execute: createSearchExecute(searchWikipedia, "search_wikipedia", false),
+    renderCall(args, theme) {
+      return new Text(theme.fg("toolTitle", "search_wikipedia ") + theme.fg("muted", `"${args.query}"`), 0, 0);
+    },
+    renderResult(result, { expanded, isPartial }, theme, context) {
+      if (isPartial) {
+        return new Text(theme.fg("muted", "Processing..."), 0, 0);
+      }
+      const details = (result.details as any) || {};
+      const count = details.count ?? 0;
+      let header = theme.fg("muted", `wikipedia(${count})`);
+      if (expanded) {
+        const textContent = result.content?.find(c => c.type === 'text');
+        if (textContent?.text) {
+          header = `${textContent.text}\n\n(${theme.fg("muted", "press " + keyHint("app.tools.expand", "to collapse"))})`;
+        }
+      } else {
+        header = `${header}\n(${theme.fg("muted", "press " + keyHint("app.tools.expand", "to expand"))})`;
+      }
+      return new Text(header, 0, 0);
+    },
+  });
+
+  // ─── search_stackoverflow tool ────────────────────────────────────────────
+  pi.registerTool({
+    name: "search_stackoverflow",
+    label: "Search Stack Overflow",
+    description:
+      "Search Stack Overflow for programming Q&A. Query with error messages, code patterns, or specific programming problems " +
+      "(e.g. 'TypeError Cannot read properties of undefined'). Use for debugging, syntax, and API usage questions.",
+    promptSnippet:
+      "Search Stack Overflow for programming Q&A. Use error messages and code patterns.",
+    parameters: Type.Object({
+      query: Type.String({ description: "Error message or code pattern" }),
+      max: Type.Optional(Type.Integer({
+        default: 10, minimum: 1, maximum: 50,
+        description: "Max results to return",
+      })),
+      noCache: Type.Optional(Type.Boolean({
+        default: false,
+        description: "Skip cache",
+      })),
+    }),
+    // StackOverflow provider reads its own API key from config directly (no param passing)
+    execute: createSearchExecute(searchStackOverflow, "search_stackoverflow", false),
+    renderCall(args, theme) {
+      return new Text(theme.fg("toolTitle", "search_stackoverflow ") + theme.fg("muted", `"${args.query}"`), 0, 0);
+    },
+    renderResult(result, { expanded, isPartial }, theme, context) {
+      if (isPartial) {
+        return new Text(theme.fg("muted", "Processing..."), 0, 0);
+      }
+      const details = (result.details as any) || {};
+      const count = details.count ?? 0;
+      let header = theme.fg("muted", `stackoverflow(${count})`);
+      if (expanded) {
+        const textContent = result.content?.find(c => c.type === 'text');
+        if (textContent?.text) {
+          header = `${textContent.text}\n\n(${theme.fg("muted", "press " + keyHint("app.tools.expand", "to collapse"))})`;
+        }
+      } else {
+        header = `${header}\n(${theme.fg("muted", "press " + keyHint("app.tools.expand", "to expand"))})`;
+      }
+      return new Text(header, 0, 0);
+    },
+  });
+
+  // ─── search_npm tool ─────────────────────────────────────────────────────
+  pi.registerTool({
+    name: "search_npm",
+    label: "Search npm",
+    description:
+      "Search the npm registry for JavaScript packages. Query with package names or functionality descriptions " +
+      "(e.g. 'state management', 'date formatting'). Use when looking for libraries or dependencies.",
+    promptSnippet:
+      "Search the npm registry for JavaScript packages. Use package names or functionality descriptions.",
+    parameters: Type.Object({
+      query: Type.String({ description: "Package name or functionality description" }),
+      max: Type.Optional(Type.Integer({
+        default: 10, minimum: 1, maximum: 50,
+        description: "Max results to return",
+      })),
+      noCache: Type.Optional(Type.Boolean({
+        default: false,
+        description: "Skip cache",
+      })),
+    }),
+    execute: createSearchExecute(searchNpm, "search_npm", true),
+    renderCall(args, theme) {
+      return new Text(theme.fg("toolTitle", "search_npm ") + theme.fg("muted", `"${args.query}"`), 0, 0);
+    },
+    renderResult(result, { expanded, isPartial }, theme, context) {
+      if (isPartial) {
+        return new Text(theme.fg("muted", "Processing..."), 0, 0);
+      }
+      const details = (result.details as any) || {};
+      const count = details.count ?? 0;
+      let header = theme.fg("muted", `npm(${count})`);
+      if (expanded) {
+        const textContent = result.content?.find(c => c.type === 'text');
+        if (textContent?.text) {
+          header = `${textContent.text}\n\n(${theme.fg("muted", "press " + keyHint("app.tools.expand", "to collapse"))})`;
+        }
+      } else {
+        header = `${header}\n(${theme.fg("muted", "press " + keyHint("app.tools.expand", "to expand"))})`;
+      }
+      return new Text(header, 0, 0);
+    },
+  });
+
+  // ─── search_github tool ──────────────────────────────────────────────────
+  pi.registerTool({
+    name: "search_github",
+    label: "Search GitHub",
+    description:
+      "Search GitHub for repositories and source code. Query with repo names, library names, or code patterns " +
+      "(e.g. 'react-router', 'fastapi'). Use when looking for source code, issues, or documentation.",
+    promptSnippet:
+      "Search GitHub for repositories and source code. Use repo names, library names, or code patterns.",
+    parameters: Type.Object({
+      query: Type.String({ description: "Repo name or code pattern" }),
+      max: Type.Optional(Type.Integer({
+        default: 10, minimum: 1, maximum: 50,
+        description: "Max results to return",
+      })),
+      noCache: Type.Optional(Type.Boolean({
+        default: false,
+        description: "Skip cache",
+      })),
+    }),
+    execute: createSearchExecute(searchGitHub, "search_github", false),
+    renderCall(args, theme) {
+      return new Text(theme.fg("toolTitle", "search_github ") + theme.fg("muted", `"${args.query}"`), 0, 0);
+    },
+    renderResult(result, { expanded, isPartial }, theme, context) {
+      if (isPartial) {
+        return new Text(theme.fg("muted", "Processing..."), 0, 0);
+      }
+      const details = (result.details as any) || {};
+      const count = details.count ?? 0;
+      let header = theme.fg("muted", `github(${count})`);
+      if (expanded) {
+        const textContent = result.content?.find(c => c.type === 'text');
+        if (textContent?.text) {
+          header = `${textContent.text}\n\n(${theme.fg("muted", "press " + keyHint("app.tools.expand", "to collapse"))})`;
+        }
+      } else {
+        header = `${header}\n(${theme.fg("muted", "press " + keyHint("app.tools.expand", "to expand"))})`;
+      }
       return new Text(header, 0, 0);
     },
   });

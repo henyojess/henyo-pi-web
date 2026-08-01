@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from 'vitest';
 import { detectContext, CODING_SIGNALS } from '../../shared/search/context';
-import { PROVIDER_MAP, sanitizeQuery } from '../../shared/search/providers';
+import { sanitizeQuery } from '../../shared/search/providers';
 import { extractDomain } from '../../shared/search/providers/base';
 import { searchNpm, searchGitHub, searchWikipedia, searchJina, searchStackOverflowAPI } from '../../shared/search/providers';
 
@@ -308,27 +308,6 @@ describe('sanitizeQuery', () => {
 
   it('no-op for simple query', () => {
     expect(sanitizeQuery('hello world')).toBe('hello world');
-  });
-});
-
-describe('PROVIDER_MAP', () => {
-  it('has all 7 expected provider keys', () => {
-    expect(PROVIDER_MAP).toHaveProperty('duckduckgo');
-    expect(PROVIDER_MAP).toHaveProperty('stackoverflow');
-    expect(PROVIDER_MAP).toHaveProperty('npm');
-    expect(PROVIDER_MAP).toHaveProperty('github');
-    expect(PROVIDER_MAP).toHaveProperty('wikipedia');
-    expect(PROVIDER_MAP).toHaveProperty('jina');
-  });
-
-  it('all values are functions', () => {
-    for (const [key, fn] of Object.entries(PROVIDER_MAP)) {
-      expect(typeof fn).toBe('function');
-    }
-  });
-
-  it('unknown key returns undefined', () => {
-    expect(PROVIDER_MAP['unknown']).toBeUndefined();
   });
 });
 

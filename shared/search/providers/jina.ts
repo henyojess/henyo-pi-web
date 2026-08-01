@@ -47,6 +47,7 @@ export async function searchJina(query: string, _config?: ProviderConfig, signal
         title: r.title || 'Untitled',
         url: r.url || '',
         snippet: (r.content || '').replace(/<[^>]+>/g, ' ').trim().substring(0, 300),
+        domain: 'jina.ai',
         source: 'jina-search',
       }));
     } catch (err: any) {

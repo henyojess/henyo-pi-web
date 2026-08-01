@@ -1,6 +1,6 @@
 import { pickRandom, delay, USER_AGENTS } from '../../user-agents';
 import { enqueue } from '../queue';
-import { SearchResult, ProviderConfig } from './base';
+import { SearchResult, ProviderConfig, sanitizeQuery } from './base';
 
 // ─── npm Provider ────────────────────────────────────────────────────────────
 
@@ -9,7 +9,10 @@ export async function searchNpm(query: string, _config?: ProviderConfig, signal?
     await delay(1000 + Math.random() * 1500);
 
     try {
-      const res = await fetch(`https://registry.npmjs.org/-/v1/search?text=${encodeURIComponent(query)}&size=10`, {
+      // npm registry search expects package-name-like input; sanitize to
+      // strip quotes/special chars that break registry queries.
+      const sanitizedQuery = sanitizeQuery(query);
+      const res = await fetch(`https://registry.npmjs.org/-/v1/search?text=${encodeURIComponent(sanitizedQuery)}&size=10`, {
         signal,
         headers: { 'User-Agent': pickRandom(USER_AGENTS) },
       });
@@ -23,6 +26,7 @@ export async function searchNpm(query: string, _config?: ProviderConfig, signal?
           title: `${pkg.name}@${pkg.version}`,
           url: `https://www.npmjs.com/package/${pkg.name}`,
           snippet: pkg.description || '',
+          domain: 'npmjs.com',
           source: 'npm',
         };
       });

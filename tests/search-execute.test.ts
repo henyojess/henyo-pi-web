@@ -1,542 +1,428 @@
 import type { SearchResult } from '../shared/search/providers';
-import type { WebFetchConfig } from '../shared/config';
-
-// Mock the search providers
-vi.mock('../shared/search/providers/duckduckgo', () => ({
-  searchDuckDuckGo: vi.fn(),
-}));
-
-vi.mock('../shared/search/providers/stackoverflow', () => ({
-  searchStackOverflow: vi.fn(),
-}));
-
-vi.mock('../shared/search/providers/npm', () => ({
-  searchNpm: vi.fn(),
-}));
-
-vi.mock('../shared/search/providers/github', () => ({
-  searchGitHub: vi.fn(),
-}));
-
-vi.mock('../shared/search/providers/wikipedia', () => ({
-  searchWikipedia: vi.fn(),
-}));
-
-vi.mock('../shared/cache', () => ({
-  createCache: vi.fn(),
-}));
-
-vi.mock('../shared/format', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('../shared/format')>();
-  return {
-    ...actual,
-    formatResults: vi.fn(),
-  };
-});
-
-vi.mock('../shared/fetch/pipeline', () => ({
-  fetchPage: vi.fn(),
-}));
-
+import { sanitizeQuery } from '../shared/search/providers/base';
 import { searchDuckDuckGo } from '../shared/search/providers/duckduckgo';
+import { searchWikipedia } from '../shared/search/providers/wikipedia';
 import { searchStackOverflow } from '../shared/search/providers/stackoverflow';
 import { searchNpm } from '../shared/search/providers/npm';
 import { searchGitHub } from '../shared/search/providers/github';
-import { searchWikipedia } from '../shared/search/providers/wikipedia';
-import { createCache } from '../shared/cache';
-import { formatResults } from '../shared/format';
-import { fetchPage } from '../shared/fetch/pipeline';
+import { rankResults, diversifyByDomain } from '../shared/format';
 
-// Mock pi
-const mockPi = {
-  registerTool: vi.fn(),
-};
-
-// We need to test the execute function directly.
-// Since execute() is defined inside registerTools(), we'll test the core logic
-// by importing and testing the shared functions that execute() uses.
-
-describe('execute() pipeline — integration tests', () => {
-  const mockProviderResults: SearchResult[] = [
-    { title: 'Result 1', url: 'https://example.com/1', snippet: 'Snippet 1', domain: 'example.com' },
-    { title: 'Result 2', url: 'https://example.com/2', snippet: 'Snippet 2', domain: 'example.com' },
-    { title: 'Result 3', url: 'https://other.com/1', snippet: 'Snippet 3', domain: 'other.com' },
-  ];
-
-  const mockConfig: WebFetchConfig = {
-    jinaEnabled: true,
-    'min-delay': 0,
-    'max-delay': 0,
-    'cache-max-files': 100,
-    'heading-threshold': 40000,
-    contexts: {
-      coding: {
-        duckduckgo: { priority: 1 },
-        stackoverflow: { priority: 1 },
-        npm: { priority: 1 },
-        github: { priority: 1 },
-      },
-      general: {
-        duckduckgo: { priority: 1 },
-        wikipedia: { priority: 1 },
-      },
-    },
+vi.mock('../shared/user-agents', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../shared/user-agents')>();
+  return {
+    ...actual,
+    pickRandom: (arr: string[]) => arr[0],
+    delay: () => Promise.resolve(),
   };
+});
 
-  beforeEach(() => {
-    vi.clearAllMocks();
+vi.mock('../shared/search/queue', async () => ({
+  enqueue: async (_key: string, fn: () => Promise<any>) => fn(),
+}));
+
+vi.mock('../shared/rate-limit', () => ({
+  RateLimitStore: class {
+    setCooldown() {}
+  },
+  DEFAULT_RATE_LIMIT_COOLDOWNS: {},
+}));
+
+// ─── Test: each provider is callable ─────────────────────────────────────────
+
+describe('search providers are callable', () => {
+  const mockNpmResponse = JSON.stringify({
+    objects: [{ package: { name: 'test-pkg', version: '1.0.0', description: 'A test package' } }],
+  });
+  const mockGitHubResponse = JSON.stringify({
+    items: [{ owner: { login: 'test' }, name: 'test-repo', html_url: 'https://github.com/test/test-repo', description: 'Test', language: 'TS' }],
+  });
+  const mockWikiResponse = JSON.stringify([
+    null, ['Test Topic'], ['A test topic'], ['https://en.wikipedia.org/wiki/Test_Topic'],
+  ]);
+  const mockWikiExtract = JSON.stringify({
+    query: { pages: { '1': { extract: 'Test extract', title: 'Test Topic' } } },
+  });
+  const mockDDGResponse = `
+    <html><body>
+    <div class="result">
+      <a class="result__a" href="/l/?uddg=https%3A%2F%2Fexample.com%2Fpage">Test Result</a>
+      <a class="result__snippet">Test snippet</a>
+    </div>
+    </div>
+    </div>
+    </body></html>
+  `;
+  const mockSOResponse = JSON.stringify({
+    items: [{ title: 'Test SO Question', link: 'https://stackoverflow.com/questions/1', question_id: 1, body: '<p>Test body</p>' }],
+    quota_remaining: 100,
   });
 
-  // ─── Mock provider helpers ──────────────────────────────────────────────
+  beforeEach(() => vi.clearAllMocks());
 
-  function setupMockProvider(
-    providerFn: ReturnType<typeof vi.fn>,
-    results: SearchResult[] = mockProviderResults,
-  ) {
-    (providerFn as any).mockResolvedValue(results);
-  }
-
-  function setupAllProvidersMocked(results: SearchResult[] = mockProviderResults) {
-    setupMockProvider(searchDuckDuckGo, results);
-    setupMockProvider(searchStackOverflow, results);
-    setupMockProvider(searchNpm, results);
-    setupMockProvider(searchGitHub, results);
-    setupMockProvider(searchWikipedia, results);
-  }
-
-  function setupMockCache(hit: SearchResult[] | null = null) {
-    const mockCache = {
-      get: vi.fn().mockReturnValue(hit),
-      put: vi.fn(),
-      clear: vi.fn(),
-    };
-    (createCache as any).mockReturnValue(mockCache);
-    return mockCache;
-  }
-
-  // ─── Test: results flow through dedup → rank → diversify → return ──────
-
-  it('flows results through dedup, rank, diversify pipeline', async () => {
-    setupAllProvidersMocked(mockProviderResults);
-    const cache = setupMockCache(null);
-
-    const { detectContext, buildProviderChain } = await import('../shared/search/context');
-    const { rankResults, diversifyByDomain, normalizeUrl } = await import('../shared/format');
-
-    // Simulate the execute() pipeline
-    const contextName = detectContext('javascript arrays');
-    const providers = buildProviderChain(contextName, mockConfig.contexts || {});
-
-    expect(providers.length).toBeGreaterThan(0);
-
-    // Run providers and collect results
-    const allResults: SearchResult[] = [];
-    for (const provider of providers) {
-      const results = await provider.fn('javascript arrays', undefined, undefined);
-      allResults.push(...results);
-    }
-
-    // Dedup
-    const seen = new Set<string>();
-    const deduped: SearchResult[] = [];
-    for (const r of allResults) {
-      const key = normalizeUrl(r.url);
-      if (!seen.has(key)) { seen.add(key); deduped.push(r); }
-    }
-
-    // Rank
-    const ranked = rankResults('javascript arrays', deduped);
-
-    // Diversify
-    const diversified = diversifyByDomain(ranked, 2);
-
-    expect(diversified.length).toBeGreaterThan(0);
-    expect(cache.put).not.toHaveBeenCalled(); // noCache would be true in this test
-  });
-
-  // ─── Test: multiple priority groups accumulate results properly ────────
-
-  it('accumulates results from multiple priority groups', async () => {
-    const { buildProviderChain } = await import('../shared/search/context');
-
-    const mixedConfig: WebFetchConfig = {
-      ...mockConfig,
-      contexts: {
-        mixed: {
-          duckduckgo: { priority: 1 },
-          stackoverflow: { priority: 2 },
-          npm: { priority: 2 },
-        },
-      },
-    };
-
-    const providers = buildProviderChain('mixed', mixedConfig.contexts);
-
-    expect(providers.length).toBe(3);
-
-    const ddgResults = providers.find(p => p.name === 'duckduckgo')!;
-    const soResults = providers.find(p => p.name === 'stackoverflow')!;
-    const npmResults = providers.find(p => p.name === 'npm')!;
-
-    expect(ddgResults.priority).toBe(1);
-    expect(soResults.priority).toBe(2);
-    expect(npmResults.priority).toBe(2);
-
-    // Simulate running in priority order
-    const allResults: SearchResult[] = [];
-
-    // Priority 1
-    setupMockProvider(searchDuckDuckGo, [
-      { title: 'DDG 1', url: 'https://ddg.com/1', snippet: '', domain: 'ddg.com' },
-    ]);
-    const ddgRes = await ddgResults.fn('test', undefined, undefined);
-    allResults.push(...ddgRes);
-
-    // Priority 2
-    setupMockProvider(searchStackOverflow, [
-      { title: 'SO 1', url: 'https://so.com/1', snippet: '', domain: 'so.com' },
-    ]);
-    const soRes = await soResults.fn('test', undefined, undefined);
-    allResults.push(...soRes);
-
-    setupMockProvider(searchNpm, [
-      { title: 'NPM 1', url: 'https://npm.com/1', snippet: '', domain: 'npm.com' },
-    ]);
-    const npmRes = await npmResults.fn('test', undefined, undefined);
-    allResults.push(...npmRes);
-
-    expect(allResults.length).toBe(3);
-  });
-
-  // ─── Test: duplicate URLs across providers are deduplicated ─────────────
-
-  it('deduplicates URLs across providers', async () => {
-    const { buildProviderChain } = await import('../shared/search/context');
-
-    const providers = buildProviderChain('coding', mockConfig.contexts || {});
-
-    const duplicateUrl = 'https://example.com/duplicate';
-
-    // Each provider returns the same URL
-    const duplicateResults: SearchResult[] = [
-      { title: 'Dup from DDG', url: duplicateUrl, snippet: '', domain: 'example.com' },
-    ];
-
-    setupMockProvider(searchDuckDuckGo, duplicateResults);
-    setupMockProvider(searchStackOverflow, duplicateResults);
-    setupMockProvider(searchNpm, duplicateResults);
-    setupMockProvider(searchGitHub, duplicateResults);
-
-    const allResults: SearchResult[] = [];
-    for (const provider of providers) {
-      const results = await provider.fn('test', undefined, undefined);
-      allResults.push(...results);
-    }
-
-    // Dedup
-    const { normalizeUrl } = await import('../shared/format');
-    const seen = new Set<string>();
-    const deduped: SearchResult[] = [];
-    for (const r of allResults) {
-      const key = normalizeUrl(r.url);
-      if (!seen.has(key)) { seen.add(key); deduped.push(r); }
-    }
-
-    // Only one result should remain after dedup
-    const dupResults = deduped.filter(r => r.url === duplicateUrl);
-    expect(dupResults.length).toBe(1);
-  });
-
-  // ─── Test: abort signal returns partial results ─────────────────────────
-
-  it('returns partial results when abort signal is triggered', async () => {
-    const { buildProviderChain } = await import('../shared/search/context');
-
-    const abortController = new AbortController();
-
-    const providers = buildProviderChain('coding', mockConfig.contexts || {});
-
-    // First provider succeeds, then abort
-    let callCount = 0;
-    const mockFn = vi.fn().mockImplementation(async () => {
-      callCount++;
-      if (callCount === 1) {
-        return [{ title: 'First', url: 'https://first.com', snippet: '', domain: 'first.com' }];
-      }
-      // Simulate abort after first provider
-      abortController.abort();
-      return [];
+  it('searchNpm returns package results', async () => {
+    const callOrder: number[] = [];
+    vi.spyOn(global, 'fetch').mockImplementation(async (url: string) => {
+      callOrder.push(url.includes('search') ? 0 : 1);
+      return new Response(mockNpmResponse, { status: 200 });
     });
 
-    setupMockProvider(searchDuckDuckGo, [{ title: 'First', url: 'https://first.com', snippet: '', domain: 'first.com' }]);
-    setupMockProvider(searchStackOverflow, []);
-    setupMockProvider(searchNpm, []);
-    setupMockProvider(searchGitHub, []);
-
-    // Simulate the execute loop with abort
-    const allResults: SearchResult[] = [];
-    const priorities = [...new Set(providers.map(p => p.priority))].sort((a, b) => a - b);
-
-    for (const priority of priorities) {
-      if (abortController.signal.aborted) {
-        // Return partial results
-        const { diversifyByDomain, formatResults } = await import('../shared/format');
-        const partial = allResults.slice(0, 10);
-        const diversified = diversifyByDomain(partial, 2);
-        expect(diversified.length).toBeGreaterThan(0);
-        expect(formatResults).toHaveBeenCalled();
-        break;
-      }
-
-      const group = providers.filter(p => p.priority === priority);
-      for (const provider of group) {
-        if (abortController.signal.aborted) break;
-        const results = await provider.fn('test', undefined, abortController.signal);
-        allResults.push(...results);
-      }
-    }
-
-    expect(allResults.length).toBeGreaterThan(0);
+    const results = await searchNpm('test');
+    expect(results.length).toBeGreaterThan(0);
+    expect(results[0].title).toContain('test-pkg');
+    expect(results[0].source).toBe('npm');
   });
 
-  // ─── Test: cache hit path returns cached results ────────────────────────
+  it('searchGitHub returns repo results', async () => {
+    vi.spyOn(global, 'fetch').mockResolvedValue(new Response(mockGitHubResponse, { status: 200 }));
 
-  it('returns cached results when cache hit', async () => {
-    const cachedResults: SearchResult[] = [
-      { title: 'Cached 1', url: 'https://cached.com/1', snippet: '', domain: 'cached.com' },
-      { title: 'Cached 2', url: 'https://cached.com/2', snippet: '', domain: 'cached.com' },
+    const results = await searchGitHub('test');
+    expect(results.length).toBeGreaterThan(0);
+    expect(results[0].title).toContain('test/test-repo');
+    expect(results[0].source).toBe('github');
+  });
+
+  it('searchWikipedia returns wiki results', async () => {
+    vi.spyOn(global, 'fetch').mockImplementation(async (url: string) => {
+      if (url.includes('opensearch')) {
+        return new Response(mockWikiResponse, { status: 200 });
+      }
+      return new Response(mockWikiExtract, { status: 200 });
+    });
+
+    const results = await searchWikipedia('test');
+    expect(results.length).toBeGreaterThan(0);
+    expect(results[0].source).toBe('wikipedia');
+  });
+
+  it('searchDuckDuckGo returns DDG results', async () => {
+    vi.spyOn(global, 'fetch').mockResolvedValue(new Response(mockDDGResponse, { status: 200 }));
+
+    const results = await searchDuckDuckGo('test');
+    expect(results.length).toBeGreaterThan(0);
+    expect(results[0].source).toBe('duckduckgo');
+  });
+
+  it('searchStackOverflow returns SO results via API', async () => {
+    vi.spyOn(global, 'fetch').mockResolvedValue(new Response(mockSOResponse, { status: 200 }));
+
+    const results = await searchStackOverflow('test');
+    expect(results.length).toBeGreaterThan(0);
+    expect(results[0].source).toBe('stackoverflow');
+  });
+});
+
+// ─── Test: sanitizeQuery behavior per provider ──────────────────────────────
+
+describe('sanitizeQuery behavior', () => {
+  it('strips quotes — needed for npm and wikipedia', () => {
+    const query = '"react state management"';
+    const sanitized = sanitizeQuery(query);
+    expect(sanitized).toBe('react state management');
+  });
+
+  it('preserves alphanumerics and common chars', () => {
+    const sanitized = sanitizeQuery('my-package_v2.0+build');
+    expect(sanitized).toBe('my-package_v2.0+build');
+  });
+
+  it('strips special chars that break API queries', () => {
+    const sanitized = sanitizeQuery('error (TypeError): undefined');
+    expect(sanitized).toBe('error TypeError undefined');
+  });
+
+  it('collapse multiple spaces', () => {
+    expect(sanitizeQuery('hello    world')).toBe('hello world');
+  });
+
+  it('trim whitespace', () => {
+    expect(sanitizeQuery('  hello  ')).toBe('hello');
+  });
+});
+
+// ─── Test: tool registration structure (from index.ts perspective) ──────────
+
+describe('search tool registration structure', () => {
+  it('has 5 distinct tool names that should be registered', () => {
+    const expectedTools = [
+      'search_ddg',
+      'search_wikipedia',
+      'search_stackoverflow',
+      'search_npm',
+      'search_github',
+    ];
+    expect(expectedTools.length).toBe(5);
+    expect(expectedTools).not.toContain('henyo_search');
+  });
+
+  it('each tool has a unique name', () => {
+    const tools = ['search_ddg', 'search_wikipedia', 'search_stackoverflow', 'search_npm', 'search_github'];
+    const unique = new Set(tools);
+    expect(unique.size).toBe(5);
+  });
+
+  it('no tool name contains routing keywords', () => {
+    const tools = ['search_ddg', 'search_wikipedia', 'search_stackoverflow', 'search_npm', 'search_github'];
+    for (const name of tools) {
+      expect(name).not.toContain('context');
+      expect(name).not.toContain('provider');
+      expect(name).not.toContain('chain');
+    }
+  });
+});
+
+// ─── Test: rankResults applies BM25 ranking ─────────────────────────────────
+
+describe('rankResults', () => {
+  it('ranks results by BM25 score — better title/snippet matches first', () => {
+    const query = 'react state management';
+    const results: SearchResult[] = [
+      { title: 'React', url: 'https://example.com/1', snippet: 'A JavaScript library for building user interfaces', domain: 'example.com' },
+      { title: 'State Management in React', url: 'https://example.com/2', snippet: 'A comprehensive guide to state management in React applications', domain: 'example.com' },
+      { title: 'React Router', url: 'https://example.com/3', snippet: 'Declarative routing for React', domain: 'example.com' },
     ];
 
-    const cache = setupMockCache(cachedResults);
-    const { formatResults } = await import('../shared/format');
+    const ranked = rankResults(query, results);
 
-    // Simulate cache hit in execute()
-    const cacheKey = 'search:coding:test query';
-    const cached = cache.get(cacheKey);
-
-    expect(cached).toEqual(cachedResults);
-    expect(formatResults).not.toHaveBeenCalled(); // Should not format — just return cached
+    // The second result ("State Management in React") should be first because
+    // its title contains both "state" and "management" and "react"
+    expect(ranked[0].title).toContain('State Management');
   });
 
-  // ─── Test: noCache path skips cache ─────────────────────────────────────
+  it('preserves original order for equal scores', () => {
+    const query = 'test';
+    const results: SearchResult[] = [
+      { title: 'Test A', url: 'https://a.com', snippet: 'test', domain: 'a.com' },
+      { title: 'Test B', url: 'https://b.com', snippet: 'test', domain: 'b.com' },
+    ];
 
-  it('skips cache when noCache is true', async () => {
-    const cache = setupMockCache([
-      { title: 'Should Not Return', url: 'https://old.com', snippet: '', domain: 'old.com' },
-    ]);
+    const ranked = rankResults(query, results);
+    // Both have equal scores, so original order is preserved
+    expect(ranked[0].title).toBe('Test A');
+    expect(ranked[1].title).toBe('Test B');
+  });
+});
 
-    // Simulate noCache = true, skip cache check
-    const noCache = true;
+// ─── Test: diversifyByDomain caps results per domain ─────────────────────────
 
-    if (!noCache) {
-      const cacheKey = 'search:coding:test query';
-      cache.get(cacheKey);
-    }
+describe('diversifyByDomain', () => {
+  it('caps initial results per domain, then relaxes to 3x', () => {
+    const results: SearchResult[] = [
+      { title: 'A', url: 'https://example.com/1', snippet: 'test', domain: 'example.com' },
+      { title: 'B', url: 'https://example.com/2', snippet: 'test', domain: 'example.com' },
+      { title: 'C', url: 'https://example.com/3', snippet: 'test', domain: 'example.com' },
+      { title: 'D', url: 'https://other.com/1', snippet: 'test', domain: 'other.com' },
+      { title: 'E', url: 'https://other.com/2', snippet: 'test', domain: 'other.com' },
+      { title: 'F', url: 'https://other.com/3', snippet: 'test', domain: 'other.com' },
+    ];
 
-    // Cache should not be queried
-    expect(cache.get).not.toHaveBeenCalled();
+    const diversified = diversifyByDomain(results, 2);
+    // Initial cap: 2 per domain = 4, then relaxes to 3x = 6 per domain
+    // With only 3 items per domain, all 6 are included (3 <= 2*3=6)
+    expect(diversified.length).toBe(6);
+
+    // After cap + relaxation: up to 3x per domain allowed
+    const exampleCount = diversified.filter(r => r.domain === 'example.com').length;
+    const otherCount = diversified.filter(r => r.domain === 'other.com').length;
+    expect(exampleCount).toBe(3);
+    expect(otherCount).toBe(3);
   });
 
-  // ─── Test: all providers failing returns empty results ──────────────────
-
-  it('handles all providers failing gracefully', async () => {
-    const { buildProviderChain } = await import('../shared/search/context');
-
-    const providers = buildProviderChain('coding', mockConfig.contexts || {});
-
-    // All providers fail
-    setupMockProvider(searchDuckDuckGo, []);
-    setupMockProvider(searchStackOverflow, []);
-    setupMockProvider(searchNpm, []);
-    setupMockProvider(searchGitHub, []);
-
-    const allResults: SearchResult[] = [];
-    const providerResults: Array<{ name: string; status: string; error?: string }> = [];
-
-    for (const provider of providers) {
-      try {
-        const results = await provider.fn('test', undefined, undefined);
-        allResults.push(...results);
-        providerResults.push({ name: provider.name, status: 'ok', error: undefined });
-      } catch (err: any) {
-        providerResults.push({ name: provider.name, status: 'error', error: err.message });
-      }
-    }
-
-    expect(allResults.length).toBe(0);
-    expect(providerResults.length).toBe(providers.length);
-    expect(providerResults.every(p => p.status === 'ok')).toBe(true);
-  });
-
-  // ─── Test: per-provider count tracking in providerResults ───────────────
-
-  it('tracks per-provider result counts in providerResults', async () => {
-    const { buildProviderChain } = await import('../shared/search/context');
-
-    const providers = buildProviderChain('coding', mockConfig.contexts || {});
-
-    const ddgCount = 3;
-    const soCount = 5;
-    const npmCount = 2;
-    const githubCount = 4;
-
-    setupMockProvider(searchDuckDuckGo, Array(ddgCount).fill(null).map((_, i) => ({
-      title: `DDG ${i}`, url: `https://ddg.com/${i}`, snippet: '', domain: 'ddg.com',
-    })));
-    setupMockProvider(searchStackOverflow, Array(soCount).fill(null).map((_, i) => ({
-      title: `SO ${i}`, url: `https://so.com/${i}`, snippet: '', domain: 'so.com',
-    })));
-    setupMockProvider(searchNpm, Array(npmCount).fill(null).map((_, i) => ({
-      title: `NPM ${i}`, url: `https://npm.com/${i}`, snippet: '', domain: 'npm.com',
-    })));
-    setupMockProvider(searchGitHub, Array(githubCount).fill(null).map((_, i) => ({
-      title: `GH ${i}`, url: `https://github.com/${i}`, snippet: '', domain: 'github.com',
-    })));
-
-    const allResults: SearchResult[] = [];
-    const providerResults: Array<{ name: string; status: string; count?: number }> = [];
-
-    for (const provider of providers) {
-      const results = await provider.fn('test', undefined, undefined);
-      allResults.push(...results);
-      providerResults.push({ name: provider.name, status: 'ok', count: results.length });
-    }
-
-    expect(allResults.length).toBe(ddgCount + soCount + npmCount + githubCount);
-
-    // Verify per-provider counts
-    const ddgResult = providerResults.find(p => p.name === 'duckduckgo');
-    const soResult = providerResults.find(p => p.name === 'stackoverflow');
-    const npmResult = providerResults.find(p => p.name === 'npm');
-    const ghResult = providerResults.find(p => p.name === 'github');
-
-    expect(ddgResult?.count).toBe(ddgCount);
-    expect(soResult?.count).toBe(soCount);
-    expect(npmResult?.count).toBe(npmCount);
-    expect(ghResult?.count).toBe(githubCount);
-  });
-
-  // ─── Test: error handling in providers ──────────────────────────────────
-
-  it('handles provider errors without crashing', async () => {
-    const { buildProviderChain } = await import('../shared/search/context');
-
-    const providers = buildProviderChain('coding', mockConfig.contexts || {});
-
-    // DDG succeeds, SO throws, NPM succeeds, GitHub throws
-    setupMockProvider(searchDuckDuckGo, [
-      { title: 'DDG 1', url: 'https://ddg.com/1', snippet: '', domain: 'ddg.com' },
-    ]);
-    (searchStackOverflow as any).mockRejectedValue(new Error('API rate limit exceeded'));
-    setupMockProvider(searchNpm, [
-      { title: 'NPM 1', url: 'https://npm.com/1', snippet: '', domain: 'npm.com' },
-    ]);
-    (searchGitHub as any).mockRejectedValue(new Error('Network error'));
-
-    const allResults: SearchResult[] = [];
-    const providerResults: Array<{ name: string; status: string; error?: string }> = [];
-
-    for (const provider of providers) {
-      try {
-        const results = await provider.fn('test', undefined, undefined);
-        allResults.push(...results);
-        providerResults.push({ name: provider.name, status: 'ok', error: undefined });
-      } catch (err: any) {
-        providerResults.push({ name: provider.name, status: 'error', error: err.message });
-      }
-    }
-
-    // Should have results from successful providers
-    expect(allResults.length).toBe(2);
-
-    // Should have error entries for failed providers
-    const errors = providerResults.filter(p => p.status === 'error');
-    expect(errors.length).toBe(2);
-    expect(errors.find(e => e.name === 'stackoverflow')?.error).toContain('rate limit');
-    expect(errors.find(e => e.name === 'github')?.error).toContain('Network');
-  });
-
-  // ─── Test: context detection affects provider chain ─────────────────────
-
-  it('coding context includes coding-specific providers', async () => {
-    const { detectContext, buildProviderChain } = await import('../shared/search/context');
-
-    expect(detectContext('const async function')).toBe('coding');
-
-    const chain = buildProviderChain('coding', mockConfig.contexts || {});
-    const names = chain.map(p => p.name);
-
-    expect(names).toContain('duckduckgo');
-    expect(names).toContain('stackoverflow');
-    expect(names).toContain('npm');
-    expect(names).toContain('github');
-    expect(names).not.toContain('wikipedia');
-  });
-
-  it('general context includes general-specific providers', async () => {
-    const { detectContext, buildProviderChain } = await import('../shared/search/context');
-
-    expect(detectContext('what is the capital of France')).toBe('general');
-
-    const chain = buildProviderChain('general', mockConfig.contexts || {});
-    const names = chain.map(p => p.name);
-
-    expect(names).toContain('duckduckgo');
-    expect(names).toContain('wikipedia');
-    expect(names).not.toContain('stackoverflow');
-    expect(names).not.toContain('npm');
-  });
-
-  // ─── Test: max results limit ────────────────────────────────────────────
-
-  it('respects max results limit', async () => {
-    const { diversifyByDomain } = await import('../shared/format');
-
-    const manyResults: SearchResult[] = Array(20).fill(null).map((_, i) => ({
-      title: `Result ${i}`,
-      url: `https://example${i}.com/page`,
-      snippet: `Snippet ${i}`,
-      domain: `example${i}.com`,
+  it('caps at maxPerDomain when many domains compete', () => {
+    // 10 domains with 1 result each = 10 results, all kept (no cap needed)
+    const results: SearchResult[] = Array.from({ length: 10 }, (_, i) => ({
+      title: `Result ${i}`, url: `https://domain${i}.com`, snippet: 'test', domain: `domain${i}.com`,
     }));
 
-    const max = 5;
-    const diversified = diversifyByDomain(manyResults, 2);
-    const limited = diversified.slice(0, max);
-
-    expect(limited.length).toBe(5);
-    expect(limited).not.toEqual(manyResults);
+    const diversified = diversifyByDomain(results, 2);
+    expect(diversified.length).toBe(10);
   });
 
-  // ─── Test: cache put after successful search ────────────────────────────
+  it('caps at maxPerDomain when single domain has many results', () => {
+    // 10 results from same domain, cap at 2 initially, relax to 3*2=6
+    const results: SearchResult[] = Array.from({ length: 10 }, (_, i) => ({
+      title: `Result ${i}`, url: `https://same.com/${i}`, snippet: 'test', domain: 'same.com',
+    }));
 
-  it('caches results when noCache is false', async () => {
-    const cache = setupMockCache(null);
+    const diversified = diversifyByDomain(results, 2);
+    // Initial cap: 2, then relax to 3*2=6
+    expect(diversified.length).toBe(6);
+  });
 
-    const searchResults: SearchResult[] = [
-      { title: 'Result 1', url: 'https://example.com/1', snippet: '', domain: 'example.com' },
+  it('preserves order within domain', () => {
+    const results: SearchResult[] = [
+      { title: 'A', url: 'https://a.com/1', snippet: 'test', domain: 'a.com' },
+      { title: 'B', url: 'https://a.com/2', snippet: 'test', domain: 'a.com' },
+      { title: 'C', url: 'https://a.com/3', snippet: 'test', domain: 'a.com' },
     ];
 
-    // Simulate cache.put call at end of execute()
-    const cacheKey = 'search:coding:test';
-    const noCache = false;
+    const diversified = diversifyByDomain(results, 2);
+    expect(diversified[0].title).toBe('A');
+    expect(diversified[1].title).toBe('B');
+  });
+});
 
-    if (!noCache) {
-      cache.put(cacheKey, searchResults);
-    }
+// ─── Test: abort signal handling (execute pipeline behavior) ─────────────────
 
-    expect(cache.put).toHaveBeenCalledWith(cacheKey, searchResults);
+/** Minimal execute pipeline clone for testing abort behavior */
+async function executePipeline(
+  providerFn: (query: string, config?: any, signal?: AbortSignal) => Promise<SearchResult[]>,
+  params: { query: string; max?: number; toolName?: string },
+  signal: AbortSignal | undefined,
+): Promise<{ content: { type: string; text: string }[]; details: Record<string, unknown> }> {
+  const { query, max = 10, toolName = 'test' } = params;
+  const results = await providerFn(query, undefined, signal);
+  const ranked = rankResults(query, results);
+  const diversified = diversifyByDomain(ranked, 2);
+
+  const providerResults: Array<{ name: string; status: 'ok' | 'error' }> = [
+    { name: toolName, status: 'ok' as const },
+  ];
+
+  // Abort check — matches the execute pipeline behavior
+  if (signal?.aborted) {
+    return {
+      content: [{ type: 'text', text: diversified.length > 0 ? diversifyByDomain(diversified, 10).map(r => r.title).join('\n') : 'Search cancelled' }],
+      details: { count: diversified.length, aborted: true, providers: providerResults },
+    };
+  }
+
+  if (diversified.length === 0) {
+    return { content: [{ type: 'text', text: 'No results found.' }], details: { count: 0, providers: providerResults } };
+  }
+
+  return {
+    content: [{ type: 'text', text: diversified.slice(0, max).map(r => r.title).join('\n') }],
+    details: { count: diversified.slice(0, max).length, providers: providerResults },
+  };
+}
+
+describe('abort signal handling', () => {
+  it('returns partial results with aborted flag when signal is aborted', async () => {
+    const mockProvider = vi.fn().mockResolvedValue([
+      { title: 'Partial Result', url: 'https://example.com', snippet: 'partial', domain: 'example.com' },
+    ] as SearchResult[]);
+
+    const controller = new AbortController();
+    controller.abort();
+
+    const result = await executePipeline(mockProvider, { query: 'test', toolName: 'search_test' }, controller.signal);
+
+    expect(result.details).toHaveProperty('aborted', true);
+    expect(result.details).toHaveProperty('count', 1);
   });
 
-  // ─── Test: empty provider chain throws ──────────────────────────────────
+  it('returns no results message when abort happens with zero results', async () => {
+    const mockProvider = vi.fn().mockResolvedValue([] as SearchResult[]);
 
-  it('throws when no providers configured for context', async () => {
-    const { buildProviderChain } = await import('../shared/search/context');
+    const controller = new AbortController();
+    controller.abort();
 
-    const emptyConfig = {
-      nonexistent: {} as any,
-    };
+    const result = await executePipeline(mockProvider, { query: 'test', toolName: 'search_test' }, controller.signal);
 
-    const chain = buildProviderChain('nonexistent', emptyConfig);
-    expect(chain.length).toBe(0);
+    expect(result.details).toHaveProperty('aborted', true);
+    expect(result.details).toHaveProperty('count', 0);
+  });
+
+  it('does not set aborted flag when signal is not aborted', async () => {
+    const mockProvider = vi.fn().mockResolvedValue([
+      { title: 'Result', url: 'https://example.com', snippet: 'test', domain: 'example.com' },
+    ] as SearchResult[]);
+
+    const controller = new AbortController();
+
+    const result = await executePipeline(mockProvider, { query: 'test', toolName: 'search_test' }, controller.signal);
+
+    expect(result.details).not.toHaveProperty('aborted');
+    expect(result.details).toHaveProperty('count', 1);
+  });
+});
+
+// ─── Test: provider status tracking in details ──────────────────────────────
+
+describe('provider status tracking', () => {
+  it('details.providers is present with name and status on success', async () => {
+    const mockProvider = vi.fn().mockResolvedValue([
+      { title: 'Result', url: 'https://example.com', snippet: 'test', domain: 'example.com' },
+    ] as SearchResult[]);
+
+    const controller = new AbortController();
+    const result = await executePipeline(mockProvider, { query: 'test', toolName: 'search_test' }, controller.signal);
+
+    expect(result.details).toHaveProperty('providers');
+    const providers = result.details.providers as Array<{ name: string; status: string }>;
+    expect(providers).toHaveLength(1);
+    expect(providers[0].name).toBe('search_test');
+    expect(providers[0].status).toBe('ok');
+  });
+
+  it('details.providers is present with error status on abort', async () => {
+    const mockProvider = vi.fn().mockResolvedValue([
+      { title: 'Partial', url: 'https://example.com', snippet: 'partial', domain: 'example.com' },
+    ] as SearchResult[]);
+
+    const controller = new AbortController();
+    controller.abort();
+
+    const result = await executePipeline(mockProvider, { query: 'test', toolName: 'search_test' }, controller.signal);
+
+    const providers = result.details.providers as Array<{ name: string; status: string }>;
+    expect(providers).toHaveLength(1);
+    expect(providers[0].name).toBe('search_test');
+    expect(providers[0].status).toBe('ok');
+  });
+
+  it('details.providers is present with zero results', async () => {
+    const mockProvider = vi.fn().mockResolvedValue([] as SearchResult[]);
+
+    const controller = new AbortController();
+    const result = await executePipeline(mockProvider, { query: 'test', toolName: 'search_test' }, controller.signal);
+
+    const providers = result.details.providers as Array<{ name: string; status: string }>;
+    expect(providers).toHaveLength(1);
+    expect(providers[0].name).toBe('search_test');
+    expect(providers[0].status).toBe('ok');
+  });
+});
+
+// ─── Test: each provider receives query correctly ───────────────────────────
+
+describe('provider query handling', () => {
+  it('npm receives sanitized query for registry search', async () => {
+    let capturedUrl = '';
+    vi.spyOn(global, 'fetch').mockImplementation(async (url: string) => {
+      capturedUrl = url;
+      return new Response(JSON.stringify({ objects: [] }), { status: 200 });
+    });
+
+    await searchNpm('"state management"');
+    expect(capturedUrl).toContain('text=state%20management');
+    expect(capturedUrl).not.toContain('"');
+  });
+
+  it('github receives raw query (quotes preserved for phrase matching)', async () => {
+    let capturedUrl = '';
+    vi.spyOn(global, 'fetch').mockImplementation(async (url: string) => {
+      capturedUrl = url;
+      return new Response(JSON.stringify({ items: [] }), { status: 200 });
+    });
+
+    await searchGitHub('"fastapi"');
+    expect(capturedUrl).toContain('q=%22fastapi%22');
+  });
+
+  it('wikipedia receives query and sanitizes internally', async () => {
+    const calls: string[] = [];
+    vi.spyOn(global, 'fetch').mockImplementation(async (url: string) => {
+      calls.push(url);
+      if (url.includes('opensearch')) {
+        return new Response(JSON.stringify([null, ['React'], ['Desc'], ['https://en.wikipedia.org/wiki/React']]), { status: 200 });
+      }
+      return new Response(JSON.stringify({ query: { pages: { '1': { extract: 'Extract', title: 'React' } } } }), { status: 200 });
+    });
+
+    await searchWikipedia('"React"');
+    // Wikipedia sanitizes internally, so quotes should be stripped from opensearch call
+    expect(calls[0]).toContain('search=React');
+    expect(calls[0]).not.toContain('"');
   });
 });

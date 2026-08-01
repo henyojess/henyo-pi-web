@@ -33,6 +33,7 @@ export async function searchWikipedia(query: string, _config?: ProviderConfig, s
           title: title.substring(0, 200),
           url: urls[i] || '',
           snippet: descriptions[i] || '',
+          domain: 'wikipedia.org',
           source: 'wikipedia',
         }));
       }
@@ -48,6 +49,7 @@ export async function searchWikipedia(query: string, _config?: ProviderConfig, s
             title: titles[i].substring(0, 200),
             url: urls[i] || '',
             snippet: descriptions[i] || '',
+            domain: 'wikipedia.org',
             source: 'wikipedia',
           });
           continue;
@@ -58,6 +60,7 @@ export async function searchWikipedia(query: string, _config?: ProviderConfig, s
           title: titles[i].substring(0, 200),
           url: urls[i] || '',
           snippet: extract ? extract.substring(0, 300) + (extract.length > 300 ? '...' : '') : descriptions[i] || '',
+          domain: 'wikipedia.org',
           source: 'wikipedia',
         });
       }

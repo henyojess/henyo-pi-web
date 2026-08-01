@@ -18,38 +18,49 @@ Or run directly:
 pi install npm:henyo-pi-web
 ```
 
-> `pi install` automatically resolves npm dependencies (`defuddle`, `jsdom`) and registers two native tools: `henyo_search` and `henyo_fetch`.
-
-> **Breaking change (v2.0):** Config keys changed from `web-search`/`web-fetch` to `henyo-search`/`henyo-fetch`. Update your `~/.pi/settings.json` accordingly. Cache directory changed from `.pi/tools-cache/web_search`/`web_fetch` to `.pi/tools-cache/henyo_search`/`henyo_fetch` — old cache files will be ignored.
+> `pi install` automatically resolves npm dependencies (`defuddle`, `jsdom`) and registers five search tools and `henyo_fetch`.
 
 ## Tools
 
-### `henyo_search`
+### `search_ddg`
 
-Search the web using DuckDuckGo, Stack Overflow, npm, GitHub, Wikipedia, or Jina. Jina is available via config but requires an API key. Context-aware routing (coding vs general), BM25 ranking, domain diversification, and provider-level result counts. Results cached 30 min.
+General web search via DuckDuckGo. Query with any topic, question, or phrase. Use for news, articles, broad topics, and as a fallback when no specialized provider fits.
 
 **Parameters:**
 
-- `query` (string) — Search query
-- `max` (integer, default 10) — Max results (1–50)
-- `context` (string, default "auto") — `"coding"`, `"general"`, or `"auto"`
-- `noCache` (boolean, default false) — Skip cache
+- `query` (string) — Search query (any topic or phrase)
 
-**Features:**
+### `search_wikipedia`
 
-- Auto-detects coding vs general queries using weighted pattern matching — strong signals (errors, package managers, imports) trigger coding immediately, weak signals require multiple matches
-- Runs providers sequentially by priority group, deduplicates results
-- Applies corpus-level BM25 ranking within each priority group
-- Diversifies results by domain (default 2 per domain)
-- Reports per-provider status (ok/error/timeout) with result counts
-- Supports partial results on abort
+Search Wikipedia for encyclopedia knowledge. Query with short topic names (e.g. "React", "Kubernetes", "Machine Learning"), not full questions. Use for definitions, concepts, history, and factual background.
 
-**TUI Rendering:**
+**Parameters:**
 
-- Collapsed/expanded views — header shows context, count, and per-provider breakdown (`duckduckgo:5 stackoverflow:3`)
-- Collapse/expand hints with keybindings
-- Partial results show "Processing…" while fetching
-- Post-slice result count (accurate after dedup/rank/diversify/max)
+- `query` (string) — Short topic name (e.g. "React", "Kubernetes")
+
+### `search_stackoverflow`
+
+Search Stack Overflow for programming Q&A. Query with error messages, code patterns, or specific programming problems (e.g. "TypeError Cannot read properties of undefined"). Use for debugging, syntax, and API usage questions.
+
+**Parameters:**
+
+- `query` (string) — Error message or code pattern
+
+### `search_npm`
+
+Search the npm registry for JavaScript packages. Query with package names or functionality descriptions (e.g. "state management", "date formatting"). Use when looking for libraries or dependencies.
+
+**Parameters:**
+
+- `query` (string) — Package name or functionality description
+
+### `search_github`
+
+Search GitHub for repositories and source code. Query with repo names, library names, or code patterns (e.g. "react-router", "fastapi"). Use when looking for source code, issues, or documentation.
+
+**Parameters:**
+
+- `query` (string) — Repo name or code pattern
 
 ### `henyo_fetch`
 
@@ -86,9 +97,9 @@ Extract clean readable content from any URL. Uses Defuddle-first extraction with
 ```
 henyo-pi-web/
 ├── package.json          # Extension manifest with pi entry point
-├── index.ts              # Extension entry point (registers henyo_search + henyo_fetch)
+├── index.ts              # Extension entry point (registers five search tools + henyo_fetch)
 ├── skills/
-│   └── deep-research/    # Multi-step autonomous research workflow with henyo_search/henyo_fetch
+│   └── deep-research/    # Multi-step autonomous research workflow with henyo-pi-web tools
 │       └── references/   # Reference docs (evidence collection, source credibility, report templates)
 ├── shared/               # Shared utilities between tools
 ├── tests/                # Unit tests
@@ -100,7 +111,7 @@ henyo-pi-web/
 
 ### `/skill:deep-research`
 
-A structured methodology for conducting deep, multi-step research — designed to work alongside henyo-pi-web's `henyo_search` and `henyo_fetch` tools. Guides the agent through planning, iterative retrieval, cross-source validation, and synthesis into a structured report with full citations. Use for complex research questions, competitive analysis, literature reviews, or any task requiring thorough investigation beyond a single search.
+A structured methodology for conducting deep, multi-step research — designed to work alongside henyo-pi-web's search and fetch tools. Guides the agent through planning, iterative retrieval, cross-source validation, and synthesis into a structured report with full citations. Use for complex research questions, competitive analysis, literature reviews, or any task requiring thorough investigation beyond a single search.
 
 **Workflow:** Plan → Retrieve → Cross-Validate → Synthesize → Report
 
@@ -119,39 +130,9 @@ Optional settings go in `~/.pi/settings.json`:
     "content-threshold": 32000,
     "jina-timeout": 30000,
     "max-response-size": 10485760
-  },
-  "henyo-search": {
-    "default-context": "general",
-    "contexts": {
-      "coding": {
-        "duckduckgo": { "priority": 1 },
-        "stackoverflow": { "priority": 1 },
-        "npm": { "priority": 1 },
-        "github": { "priority": 1 },
-        "ranking": true
-      },
-      "general": {
-        "duckduckgo": { "priority": 1 },
-        "wikipedia": { "priority": 1 },
-        "ranking": true
-      }
-    }
   }
 }
 ```
-
-**henyo-search config options:**
-
-| Option | Type | Description |
-|--------|------|-------------|
-| `default-context` | string | Default context when `context="auto"` (default: `"general"`) |
-| `contexts` | object | Per-context provider chains with priorities |
-| `contexts.<name>.ranking` | boolean | Enable BM25 ranking per context (default: `true`) |
-| `api-key` | string | StackOverflow API key (optional) |
-| `rate-limit-cooldowns` | object | Per-provider cooldown in seconds |
-| `max-per-domain` | number | Max results per domain |
-
-> **Note:** Jina is available as a provider but requires an API key. Add it manually via `contexts.general.jina` config if you have a Jina API key.
 
 **henyo-fetch config options:**
 
