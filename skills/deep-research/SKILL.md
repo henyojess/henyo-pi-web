@@ -69,23 +69,26 @@ For each subtask, execute a retrieve-query-extract cycle.
 
 ### Step 2.1: Search
 
-Use `bash` with web search tools, `henyo_fetch` for content extraction, and `read`/`grep`/`find` as needed:
+Use the provider-specific search tools, `henyo_fetch` for content extraction, and `read`/`grep`/`find` as needed:
 
-```bash
-# Search for information
-curl -s "https://html.duckduckgo.com/html/?q=QUERY" | grep -oP '(?<=class="result__url").*?' | head -20
+```
+# General web search (news, articles, broad topics)
+search_ddg(query="QUERY", max=10)
 
-# Extract page content for analysis
-curl -s -L "URL" | head -10000
+# Definitions, concepts, historical background
+search_wikipedia(query="TOPIC", max=10)
 
-# For npm/package ecosystems
-npm search "QUERY" 2>/dev/null | head -30
+# Programming Q&A, debugging, code patterns
+search_stackoverflow(query="ERROR MESSAGE OR CODE PATTERN", max=10)
 
-# For GitHub code repos
-curl -s "https://api.github.com/search/repositories?q=QUERY&sort=stars" | head -500
+# JavaScript/Node.js packages and ecosystem
+search_npm(query="PACKAGE NAME OR FUNCTIONALITY", max=10)
 
-# For arXiv papers
-curl -s "http://export.arxiv.org/api/query?search_query=ti:QUERY&max_results=10" | head -1000
+# Source code, repositories, developer topics
+search_github(query="REPO NAME OR CODE PATTERN", max=10)
+
+# Extract full page content from URLs
+henyo_fetch(url="URL")
 ```
 
 Prioritize sources in this order:
