@@ -243,7 +243,7 @@ Write to `research-report.md`:
 Use these pi tools in sequence:
 
 1. **Planning:** Write plan file, confirm with user
-2. **Retrieval:** Use `bash` for searches, `henyo_fetch` for content, `write`/`edit` for findings
+2. **Retrieval:** Use `search_ddg` for general web search, `search_wikipedia` for definitions/background, `search_stackoverflow` for programming Q&A, `search_npm` for package research, `search_github` for code repos, `henyo_fetch` for content extraction, `write`/`edit` for findings
 3. **Synthesis:** Cross-reference all findings, identify gaps
 4. **Report:** Generate the final structured report
 
