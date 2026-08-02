@@ -206,10 +206,10 @@ function parseHtmlResults(html: string): SearchResult[] {
 
 // ─── StackOverflow Provider ──────────────────────────────────────────────────
 
-export async function searchStackOverflow(query: string, signal?: AbortSignal): Promise<SearchResult[]> {
+export async function searchStackOverflow(query: string, signal?: AbortSignal, config?: ProviderConfig): Promise<SearchResult[]> {
   return enqueue('stackoverflow', async () => {
     try {
-      return await searchStackOverflowAPI(query, undefined, signal);
+      return await searchStackOverflowAPI(query, config, signal);
     } catch (err) {
       if (err instanceof StackOverflowAPIError) {
         rateLimitStore.setCooldown('stackoverflow', DEFAULT_RATE_LIMIT_COOLDOWNS.stackoverflow);
