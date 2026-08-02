@@ -1,13 +1,17 @@
-import fs from 'node:fs';
+import * as fs from 'node:fs';
 import { pickRandom, USER_AGENTS } from '../../user-agents';
 import { enqueue } from '../queue';
 import { SearchResult } from './base';
+import { shouldTrace } from '../trace';
 
-let _debugEnabled = false;
-
-function trace(msg: string) {
-  if (_debugEnabled) {
-    fs.appendFileSync('/tmp/jina-trace.log', `[${new Date().toISOString()}] ${msg}\n`);
+function trace(msg: string): void {
+  const traceConfig = (globalThis as any).__henyoTraceConfig;
+  if (shouldTrace(traceConfig, 'jina')) {
+    try {
+      fs.appendFileSync('/tmp/jina-trace.log', `[${new Date().toISOString()}] ${msg}\n`);
+    } catch {
+      // Silently fail — trace logging should never break the provider
+    }
   }
 }
 
