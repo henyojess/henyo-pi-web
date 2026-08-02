@@ -58,12 +58,14 @@ export default function (pi: ExtensionAPI) {
     name: "search_ddg",
     label: "Search DuckDuckGo",
     description:
-      "General web search via DuckDuckGo. Query with any topic, question, or phrase. " +
-      "Use for news, articles, broad topics, and as a fallback when no specialized provider fits.",
+      "General web search via DuckDuckGo. Use for: news, articles, broad topics, general queries. " +
+      "Don't use for: encyclopedia definitions (→ search_wikipedia), programming errors (→ search_stackoverflow), " +
+      "package lookups (→ search_npm), or repo/source searches (→ search_github). " +
+      "Domain: duckduckgo.com, general web results.",
     promptSnippet:
-      "Search DuckDuckGo for general web results. Use for news, articles, and broad topics.",
+      "General web search. Use for news, articles, broad topics. Fallback when no specialized tool fits.",
     parameters: Type.Object({
-      query: Type.String({ description: "Search query (any topic or phrase)" }),
+      query: Type.String({ description: "Search query — any topic, question, or phrase" }),
       max: Type.Optional(Type.Integer({
         default: 10, minimum: 1, maximum: 50,
         description: "Max results to return",
