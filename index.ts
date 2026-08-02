@@ -10,7 +10,7 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 function extPath(...segments: string[]) {
   return join(__dirname, ...segments);
 }
-import { FetchResultUI, buildErrorFetchHeader, buildExpandedFetchContent, buildCollapsedFetchHeader } from "./shared/fetch/ui.js";
+import { FetchResultUI, buildErrorFetchHeader, buildCollapsedFetchHeader } from "./shared/fetch/ui.js";
 import type { FetchErrorCategory } from "./shared/fetch/pipeline.js";
 const LOG = "/tmp/henyo-fetch-debug.log";
 function log(...args: any[]) {
@@ -411,15 +411,11 @@ export default function (pi: ExtensionAPI) {
         return new Text(`${header}\n(${theme.fg("muted", "press " + keyHint("app.tools.expand", "to expand"))})`, 0, 0);
       }
 
-      if (expanded) {
-        const expandedText = buildExpandedFetchContent(ui, theme, keyHint);
-        if (expandedText) {
-          return new Text(expandedText, 0, 0);
-        }
-      }
-
       const header = buildCollapsedFetchHeader(ui, theme);
-      return new Text(`${header}\n(${theme.fg("muted", "press " + keyHint("app.tools.expand", "to expand"))})`, 0, 0);
+      if (ui.cacheFilePath) {
+        return new Text(`${header}\n\n  Cache: ${ui.cacheFilePath}`, 0, 0);
+      }
+      return new Text(header, 0, 0);
     },
   });
 

@@ -267,6 +267,7 @@ export async function fetchPage(options: FetchPageOptions): Promise<FetchResult>
   }
 
   const sizeInfo = formatSize(contentLength);
+  const cacheFilePath = keyToPath(getCacheDir('henyo_fetch'), cacheKey);
   const fetchResult: FetchResult = {
     text: truncatedResult.bodyText,
     resolvedUrl,
@@ -275,6 +276,7 @@ export async function fetchPage(options: FetchPageOptions): Promise<FetchResult>
     truncated: truncatedResult.truncated,
     contentLengthKB: sizeInfo.contentLengthKB,
     sizeLabel: sizeInfo.sizeLabel,
+    cacheFilePath,
   };
 
   // Cache

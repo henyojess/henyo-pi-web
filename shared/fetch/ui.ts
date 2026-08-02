@@ -16,7 +16,6 @@ export interface FetchResultUI {
   cacheFilePath?: string;
   error?: string;
   errorCategory?: string;
-  content?: string;
 }
 
 /** Source badge color mapping. */
@@ -85,21 +84,6 @@ export function buildCollapsedFetchHeader(ui: FetchResultUI, theme: Theme): stri
 }
 
 /**
- * Build expanded content text for a fetch result.
- * Includes the full content with a collapse hint.
- */
-export function buildExpandedFetchContent(ui: FetchResultUI, theme: Theme, keyHintFn?: (action: string, label: string) => string): string {
-  if (ui.oversized) {
-    return buildOversizedCard(ui, theme);
-  }
-
-  const header = buildCollapsedFetchHeader(ui, theme);
-  const content = ui.content || '';
-  const collapseHint = keyHintFn ? keyHintFn('app.tools.expand', 'to collapse') : '[ctrl+e]';
-  return `${header}\n\n${content}\n\n(${theme.fg('muted', 'press ' + collapseHint + ')')})`;
-}
-
-/**
  * Build an error header line for fetch failures.
  */
 export function buildErrorFetchHeader(ui: FetchResultUI, theme: Theme): string {
@@ -120,45 +104,6 @@ export function buildErrorFetchHeader(ui: FetchResultUI, theme: Theme): string {
   }
 
   return parts.join('  ');
-}
-
-/**
- * Build an oversized content card with metadata and guidance.
- */
-function buildOversizedCard(ui: FetchResultUI, theme: Theme): string {
-  const lines: string[] = [];
-
-  // Title
-  lines.push(theme.fg('warning', theme.bold('Content too large to display')));
-  if (ui.sizeLabel) {
-    lines.push(theme.fg('muted', `(${ui.sizeLabel})`));
-  }
-  lines.push('');
-
-  // Metadata
-  const url = truncateUrl(ui.url, 50);
-  lines.push(`  ${theme.fg('muted', 'URL:')} ${url}`);
-  if (ui.title) {
-    lines.push(`  ${theme.fg('muted', 'Title:')} ${ui.title}`);
-  }
-  lines.push(`  ${theme.fg('muted', 'Source:')} ${ui.source}`);
-  if (ui.sizeLabel) {
-    lines.push(`  ${theme.fg('muted', 'Size:')}  ${ui.sizeLabel}`);
-  }
-  if (ui.cacheFilePath) {
-    lines.push(`  ${theme.fg('muted', 'Cache:')} ${ui.cacheFilePath}`);
-  }
-  lines.push('');
-
-  // Guidance
-  lines.push(`  ${theme.fg('muted', 'The content was cached locally. You can:')}`);
-  lines.push(`  ${theme.fg('muted', '  1. Reduce content-threshold in your config')}`);
-  lines.push(`  ${theme.fg('muted', '  2. Use noCache: true to get a fresh fetch')}`);
-  if (ui.cacheFilePath) {
-    lines.push(`  ${theme.fg('muted', `  3. Check the cache file at: ${ui.cacheFilePath}`)}`);
-  }
-
-  return lines.join('\n');
 }
 
 /**
