@@ -75,7 +75,7 @@ export default function (pi: ExtensionAPI) {
         description: "Skip cache",
       })),
     }),
-    execute: createSearchExecute(searchDuckDuckGo, "search_ddg", false),
+    execute: createSearchExecute(searchDuckDuckGo, "search_ddg", false, config['henyo-search']),
     renderCall(args, theme) {
       return new Text(theme.fg("toolTitle", "search_ddg ") + theme.fg("muted", `"${args.query}"`), 0, 0);
     },
@@ -121,7 +121,7 @@ export default function (pi: ExtensionAPI) {
       })),
     }),
     // Wikipedia sanitizes internally (strips HTML, limits extract length), so outer sanitization is redundant
-    execute: createSearchExecute(searchWikipedia, "search_wikipedia", false),
+    execute: createSearchExecute(searchWikipedia, "search_wikipedia", false, config['henyo-search']),
     renderCall(args, theme) {
       return new Text(theme.fg("toolTitle", "search_wikipedia ") + theme.fg("muted", `"${args.query}"`), 0, 0);
     },
@@ -166,8 +166,7 @@ export default function (pi: ExtensionAPI) {
         description: "Skip cache",
       })),
     }),
-    // StackOverflow provider reads its own API key from config directly (no param passing)
-    execute: createSearchExecute(searchStackOverflow, "search_stackoverflow", false),
+    execute: createSearchExecute(searchStackOverflow, "search_stackoverflow", false, config['henyo-search']),
     renderCall(args, theme) {
       return new Text(theme.fg("toolTitle", "search_stackoverflow ") + theme.fg("muted", `"${args.query}"`), 0, 0);
     },
@@ -212,7 +211,7 @@ export default function (pi: ExtensionAPI) {
         description: "Skip cache",
       })),
     }),
-    execute: createSearchExecute(searchNpm, "search_npm", true),
+    execute: createSearchExecute(searchNpm, "search_npm", true, config['henyo-search']),
     renderCall(args, theme) {
       return new Text(theme.fg("toolTitle", "search_npm ") + theme.fg("muted", `"${args.query}"`), 0, 0);
     },
@@ -256,7 +255,7 @@ export default function (pi: ExtensionAPI) {
         description: "Skip cache",
       })),
     }),
-    execute: createSearchExecute(searchGitHub, "search_github", false),
+    execute: createSearchExecute(searchGitHub, "search_github", false, config['henyo-search']),
     renderCall(args, theme) {
       return new Text(theme.fg("toolTitle", "search_github ") + theme.fg("muted", `"${args.query}"`), 0, 0);
     },
