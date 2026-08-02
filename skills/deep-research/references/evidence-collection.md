@@ -48,24 +48,24 @@ When collecting quantitative data, use tabular format:
 
 ## Pattern 3: Search Query Log
 
-Track what was searched and what was found:
+Track what was searched, which tools were used, and what was found:
 
 ```markdown
 # Search Log
 
 ## Round 1: Initial Discovery
-- Query: `"[query]"`
+- Tool: `search_ddg` | Query: `"[query]"`
   - Source [1]: <title> — <url> — <key finding>
   - Source [2]: <title> — <url> — <key finding>
-- Query: `"[query]"`
+- Tool: `search_github` | Query: `"[query]"`
   - Source [3]: ...
 
 ## Round 2: Follow-up
-- Query: `"[query]"`
+- Tool: `search_npm` | Query: `"[query]"`
   - Source [4]: ...
 
 ## Round 3: Verification
-- Query: `"[query]"`
+- Tool: `search_stackoverflow` | Query: `"[query]"`
   - Source [5]: ...
   - Source [6]: ...
 ```

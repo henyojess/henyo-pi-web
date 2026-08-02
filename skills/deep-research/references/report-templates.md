@@ -93,7 +93,13 @@
 <Full evidence cards or tables>
 
 ## Appendix B: Search Log
-<Summary of searches conducted>
+
+| Round | Tool | Query | Sources Found | Key Findings |
+|-------|------|-------|---------------|--------------|
+| 1 | `search_ddg` | "..." | 3 | ... |
+| 1 | `search_github` | "..." | 2 | ... |
+| 2 | `search_npm` | "..." | 1 | ... |
+| ... | ... | ... | ... | ... |
 
 ## Appendix C: Glossary
 <Terminology definitions for complex topics>

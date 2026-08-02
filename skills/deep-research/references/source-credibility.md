@@ -94,6 +94,18 @@ Strong sources typically have:
 9. **Full-text availability** — Content is accessible, not just a snippet
 10. **Downloadable data** — Raw data or datasets available for verification
 
+## Tool-to-Domain Mapping
+
+Different search tools surface different domain types. Use this to evaluate results:
+
+| Tool | Typical Domains Sourced | Credibility Range |
+|------|------------------------|-------------------|
+| `search_ddg` | All web (news, blogs, forums, official sites) | High to Low (depends on source) |
+| `search_wikipedia` | Wikipedia articles only | Medium-High (crowdsourced but well-moderated) |
+| `search_stackoverflow` | Stack Overflow Q&A, some GitHub | Medium (community-vetted) |
+| `search_npm` | npm registry, package pages | Medium (registry data is authoritative; docs vary) |
+| `search_github` | GitHub repos, issues, discussions | Medium-High (source code is primary; issues vary) |
+
 ## Quick Assessment Checklist
 
 For each source, answer:
