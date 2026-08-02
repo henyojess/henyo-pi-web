@@ -69,32 +69,74 @@ For each subtask, execute a retrieve-query-extract cycle.
 
 ### Step 2.1: Search
 
-Use the provider-specific search tools, `henyo_fetch` for content extraction, and `read`/`grep`/`find` as needed:
+For each subtask, select tools strategically based on what you need to find. Never default to a single tool.
 
-```
-# General web search (news, articles, broad topics)
-search_ddg(query="QUERY", max=10)
+#### Tool Selection Strategy
 
-# Definitions, concepts, historical background
-search_wikipedia(query="TOPIC", max=10)
+**Decision Matrix:**
 
-# Programming Q&A, debugging, code patterns
-search_stackoverflow(query="ERROR MESSAGE OR CODE PATTERN", max=10)
+| What am I looking for? | Primary Tool | Secondary Tool | Why |
+|------------------------|--------------|----------------|-----|
+| General news, articles, broad topics | `search_ddg` | — | DuckDuckGo indexes the broad web |
+| Definitions, concepts, historical background | `search_wikipedia` | `search_ddg` | Wikipedia provides structured overviews |
+| Programming Q&A, debugging, code patterns | `search_stackoverflow` | `search_github` | Stack Overflow has curated developer answers |
+| JavaScript/Node.js packages, ecosystem | `search_npm` | `search_github` | npm has package metadata; GitHub has source |
+| Source code, repositories, developer topics | `search_github` | `search_ddg` | GitHub has code, issues, commits, README |
+| Current events, pricing, recent data | `search_ddg` | — | Only web search has real-time data |
+| Library migration guides, best practices | `search_stackoverflow` | `search_github` | Developers share migration experiences |
+| Package size, dependencies, version history | `search_npm` | — | npm registry has full package metadata |
+| Checking if a repo is maintained | `search_github` | — | Commits, issues, PRs show activity |
+| Academic papers, research | `search_ddg` | `search_wikipedia` | Web search finds papers; Wikipedia contextualizes |
 
-# JavaScript/Node.js packages and ecosystem
-search_npm(query="PACKAGE NAME OR FUNCTIONALITY", max=10)
+**Negative cases (when NOT to use a tool):**
+- Current pricing data → use `search_ddg`, NOT `search_wikipedia` (Wikipedia is often outdated)
+- Recent security vulnerabilities → use `search_ddg` + `search_github`, NOT `search_wikipedia`
+- Framework comparison → use `search_ddg` + `search_github`, NOT `search_npm` (npm doesn't compare frameworks)
+- Library best practices → use `search_stackoverflow` + `search_github`, NOT `search_ddg` (broader web is noisier)
 
-# Source code, repositories, developer topics
-search_github(query="REPO NAME OR CODE PATTERN", max=10)
+**Multi-Tool Requirement:** For each subtask, use at least 2 different search tools when the question has multiple dimensions.
 
-# Extract full page content from URLs
-henyo_fetch(url="URL")
-```
+| Complexity | Tool Count | Example |
+|------------|-----------|---------|
+| Simple factual (single dimension) | 1 tool | "What year was React released?" → `search_wikipedia` |
+| Moderate (2+ dimensions) | 2 tools | "Is MedusaJS viable?" → `search_ddg` + `search_github` |
+| Complex investigation | 3+ tools | "Evaluate Node.js CMS options" → `search_ddg` + `search_github` + `search_npm` + `search_stackoverflow` |
 
-Prioritize sources in this order:
+**When to use multiple tools:**
+- The subtask has more than one aspect (e.g., "is X viable" = popularity + quality + community)
+- You need to cross-validate a claim
+- One tool's results are insufficient for the question
+- Different tools surface different evidence types (e.g., npm shows package size, GitHub shows activity)
+
+**When a single tool is sufficient:**
+- The question is narrow and factual
+- One tool is the canonical source (e.g., "What's the latest version of X?" → `search_npm`)
+- The other tools would return redundant information
+
+**Pre-Search Checklist** — before running any search round:
+- [ ] **Which tools are relevant?** Match the subtask to the decision matrix above
+- [ ] **Am I using only one tool?** If yes, would a second tool add value?
+- [ ] **What am I trying to verify?** Each tool should answer a different aspect
+- [ ] **Is there a negative case?** Am I avoiding tools that would give poor results?
+- [ ] **Will I cross-validate?** Do I have at least 2 sources for significant claims?
+
+**Available Tools:**
+
+| Tool | Best For | Data Type |
+|------|----------|-----------|
+| `search_ddg` | Broad web, news, current data | Web pages, articles, forums |
+| `search_wikipedia` | Definitions, concepts, history | Encyclopedic overviews |
+| `search_stackoverflow` | Code patterns, debugging, best practices | Developer Q&A |
+| `search_npm` | JavaScript packages, ecosystem | Package metadata, registry |
+| `search_github` | Repositories, code, project health | Source code, issues, commits |
+| `henyo_fetch` | Extract content from specific URLs | Full page content |
+
+**Source Credibility Priority** — when evaluating results from any tool, prioritize sources in this order:
 1. **Primary sources** — official documentation, academic papers, government publications
 2. **Secondary sources** — established news outlets, well-known industry publications
 3. **Community sources** — forums, blogs, social media (with lower credibility)
+
+This priority applies regardless of which tool returned the result.
 
 ### Step 2.2: Extract & Summarize
 
@@ -240,10 +282,8 @@ Write to `research-report.md`:
 
 ### Workflow in pi
 
-Use these pi tools in sequence:
-
 1. **Planning:** Write plan file, confirm with user
-2. **Retrieval:** Use `search_ddg` for general web search, `search_wikipedia` for definitions/background, `search_stackoverflow` for programming Q&A, `search_npm` for package research, `search_github` for code repos, `henyo_fetch` for content extraction, `write`/`edit` for findings
+2. **Retrieval:** For each subtask, use the Tool Selection Strategy (decision matrix above) to pick tools. Use at least 2 different tools when the question has multiple dimensions. Run tools in parallel when possible. Use `henyo_fetch` to extract content from promising URLs. Use `write`/`edit` for findings.
 3. **Synthesis:** Cross-reference all findings, identify gaps
 4. **Report:** Generate the final structured report
 
