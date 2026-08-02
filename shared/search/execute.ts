@@ -1,5 +1,5 @@
 import { createCache } from '../cache';
-import { SearchResult, sanitizeQuery } from './providers/base';
+import { SearchResult, sanitizeQuery, ProviderConfig } from './providers/base';
 import { formatResults, rankResults, diversifyByDomain } from '../format';
 
 /** Get cache directory for a search tool */
@@ -9,11 +9,14 @@ function getSearchCacheDir(toolName: string): string {
 }
 
 export function createSearchExecute(
-  providerFn: (query: string, signal?: AbortSignal) => Promise<SearchResult[]>,
+  providerFn: (query: string, signal?: AbortSignal, config?: ProviderConfig) => Promise<SearchResult[]>,
   toolName: string,
   needsSanitization: boolean,
+  providerConfig?: ProviderConfig,
 ) {
   return async (_toolCallId: string, params: { query: string; max?: number; noCache?: boolean }, signal: AbortSignal | undefined, _onUpdate: any, _ctx: any) => {
+    // Wire trace config for providers that check globalThis.__henyoTraceConfig
+    (globalThis as any).__henyoTraceConfig = providerConfig?.trace ?? false;
     const { query, max = 10, noCache = false } = params;
 
     const cache = createCache<SearchResult[]>(
@@ -38,7 +41,7 @@ export function createSearchExecute(
     const providerResults: Array<{ name: string; status: 'ok' | 'error' }> = [];
     let results: SearchResult[];
     try {
-      results = await providerFn(searchQuery, signal);
+      results = await providerFn(searchQuery, signal, providerConfig);
       providerResults.push({ name: toolName, status: 'ok' });
     } catch (err: any) {
       providerResults.push({ name: toolName, status: 'error' });
