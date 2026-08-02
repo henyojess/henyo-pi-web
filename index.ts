@@ -103,12 +103,14 @@ export default function (pi: ExtensionAPI) {
     name: "search_wikipedia",
     label: "Search Wikipedia",
     description:
-      "Search Wikipedia for encyclopedia knowledge. Query with short topic names (e.g. 'React', 'Kubernetes', 'Machine Learning'), " +
-      "not full questions. Use for definitions, concepts, history, and factual background.",
+      "Encyclopedia knowledge via Wikipedia. Use for: definitions, concepts, history, factual background, short topic names. " +
+      "Don't use for: full questions, code errors (→ search_stackoverflow), recent news (→ search_ddg), " +
+      "package docs (→ search_npm), or Q&A (→ search_stackoverflow). " +
+      "Domain: wikipedia.org. Use short topic names like 'React (software)' or 'Kubernetes'.",
     promptSnippet:
-      "Search Wikipedia for encyclopedia knowledge. Use short topic names, not full questions.",
+      "Search Wikipedia for definitions, concepts, history. Use short topic names, not full questions.",
     parameters: Type.Object({
-      query: Type.String({ description: "Short topic name (e.g. 'React', 'Kubernetes')" }),
+      query: Type.String({ description: "Short topic name (e.g. 'React (software)', 'Kubernetes', 'Machine Learning')" }),
       max: Type.Optional(Type.Integer({
         default: 10, minimum: 1, maximum: 50,
         description: "Max results to return",
@@ -147,12 +149,14 @@ export default function (pi: ExtensionAPI) {
     name: "search_stackoverflow",
     label: "Search Stack Overflow",
     description:
-      "Search Stack Overflow for programming Q&A. Query with error messages, code patterns, or specific programming problems " +
-      "(e.g. 'TypeError Cannot read properties of undefined'). Use for debugging, syntax, and API usage questions.",
+      "Programming Q&A via Stack Overflow. Use for: error messages, code patterns, specific programming problems, debugging, syntax, API usage. " +
+      "Don't use for: general CS concepts (→ search_wikipedia), package docs (→ search_npm), " +
+      "repo searches (→ search_github), or non-programming topics (→ search_ddg). " +
+      "Domain: stackoverflow.com. Include error messages and code patterns in the query.",
     promptSnippet:
-      "Search Stack Overflow for programming Q&A. Use error messages and code patterns.",
+      "Search Stack Overflow for programming Q&A. Include error messages and code patterns.",
     parameters: Type.Object({
-      query: Type.String({ description: "Error message or code pattern" }),
+      query: Type.String({ description: "Error message, code pattern, or specific programming problem" }),
       max: Type.Optional(Type.Integer({
         default: 10, minimum: 1, maximum: 50,
         description: "Max results to return",
@@ -191,12 +195,14 @@ export default function (pi: ExtensionAPI) {
     name: "search_npm",
     label: "Search npm",
     description:
-      "Search the npm registry for JavaScript packages. Query with package names or functionality descriptions " +
-      "(e.g. 'state management', 'date formatting'). Use when looking for libraries or dependencies.",
+      "JavaScript package registry search. Use for: npm package names, JS library functionality descriptions, dependency lookups. " +
+      "Don't use for: general JS questions (→ search_stackoverflow), GitHub repos (→ search_github), " +
+      "or non-JS packages (pip, crates, pypi → search_ddg). " +
+      "Domain: npmjs.com, node_modules. Use package names or functionality descriptions.",
     promptSnippet:
-      "Search the npm registry for JavaScript packages. Use package names or functionality descriptions.",
+      "Search npm registry for JavaScript packages. Use package names or functionality descriptions.",
     parameters: Type.Object({
-      query: Type.String({ description: "Package name or functionality description" }),
+      query: Type.String({ description: "JavaScript package name or functionality description" }),
       max: Type.Optional(Type.Integer({
         default: 10, minimum: 1, maximum: 50,
         description: "Max results to return",
@@ -234,12 +240,13 @@ export default function (pi: ExtensionAPI) {
     name: "search_github",
     label: "Search GitHub",
     description:
-      "Search GitHub for repositories and source code. Query with repo names, library names, or code patterns " +
-      "(e.g. 'react-router', 'fastapi'). Use when looking for source code, issues, or documentation.",
+      "Repository and source code search via GitHub. Use for: repo names, library names, code patterns, source code, issues, documentation. " +
+      "Don't use for: package docs (→ search_npm), Q&A (→ search_stackoverflow), or general web search (→ search_ddg). " +
+      "Domain: github.com, git repositories. Use repo names, library names, or code patterns.",
     promptSnippet:
-      "Search GitHub for repositories and source code. Use repo names, library names, or code patterns.",
+      "Search GitHub for repos, source code, issues. Use repo names, library names, or code patterns.",
     parameters: Type.Object({
-      query: Type.String({ description: "Repo name or code pattern" }),
+      query: Type.String({ description: "Repository name, library name, or code pattern" }),
       max: Type.Optional(Type.Integer({
         default: 10, minimum: 1, maximum: 50,
         description: "Max results to return",
