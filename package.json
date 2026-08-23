@@ -17,7 +17,7 @@
     "LICENSE",
     "README.md"
   ],
-  "description": "Web search and fetch tools for Pi — DDG, Stack Overflow, Wikipedia, Defuddle extraction, and more.",
+  "description": "Web search and fetch tools for Pi \u2014 DDG, Stack Overflow, Wikipedia, Defuddle extraction, and more.",
   "keywords": [
     "pi-package",
     "pi-extension"
@@ -41,5 +41,6 @@
     "extensions": [
       "index.ts"
     ]
-  }
+  },
+  "packageManager": "pnpm@11.22.0"
 }
