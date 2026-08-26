@@ -29,14 +29,20 @@ General web search via DuckDuckGo. Query with any topic, question, or phrase. Us
 **Parameters:**
 
 - `query` (string) — Search query (any topic or phrase)
+- `max` (integer, default 10, 1–50) — Max results to return
+- `noCache` (boolean, default false) — Skip cache
 
 ### `search_wikipedia`
 
 Search Wikipedia for encyclopedia knowledge. Query with short topic names (e.g. "React", "Kubernetes", "Machine Learning"), not full questions. Use for definitions, concepts, history, and factual background.
 
+OpenSearch is prefix/title match — short topic names (e.g. "React (software)") work best; natural-language questions may return 0 results.
+
 **Parameters:**
 
 - `query` (string) — Short topic name (e.g. "React", "Kubernetes")
+- `max` (integer, default 10, 1–50) — Max results to return
+- `noCache` (boolean, default false) — Skip cache
 
 ### `search_stackoverflow`
 
@@ -45,6 +51,8 @@ Search Stack Overflow for programming Q&A. Query with error messages, code patte
 **Parameters:**
 
 - `query` (string) — Error message or code pattern
+- `max` (integer, default 10, 1–50) — Max results to return
+- `noCache` (boolean, default false) — Skip cache
 
 ### `search_npm`
 
@@ -53,6 +61,8 @@ Search the npm registry for JavaScript packages. Query with package names or fun
 **Parameters:**
 
 - `query` (string) — Package name or functionality description
+- `max` (integer, default 10, 1–50) — Max results to return
+- `noCache` (boolean, default false) — Skip cache
 
 ### `search_github`
 
@@ -61,6 +71,8 @@ Search GitHub for repositories and source code. Query with repo names, library n
 **Parameters:**
 
 - `query` (string) — Repo name or code pattern
+- `max` (integer, default 10, 1–50) — Max results to return
+- `noCache` (boolean, default false) — Skip cache
 
 ### `henyo_fetch`
 
@@ -130,6 +142,10 @@ Optional settings go in `~/.pi/settings.json`:
     "content-threshold": 32000,
     "jina-timeout": 30000,
     "max-response-size": 10485760
+  },
+  "henyo-search": {
+    "trace": true,
+    "providers": { "stackoverflow": { "api-key": "SO-KEY" } }
   }
 }
 ```
@@ -145,6 +161,17 @@ Optional settings go in `~/.pi/settings.json`:
 | `content-threshold` | number | 32000 | Max content size; oversize returns metadata only |
 | `jina-timeout` | number | 30000 | Jina fallback timeout (ms) |
 | `max-response-size` | number | 10485760 | Max response body size (bytes) |
+
+**henyo-search config options:**
+
+| Option | Type | Default | Description |
+|--------|------|---------|-------------|
+| `trace` | boolean \| string[] | none | Pipeline debug tracing: `true` traces all providers, a list of provider names traces only those. Logs to `/tmp/henyo-trace.log` with rotation. |
+| `providers.<name>.api-key` | string | none | Per-provider API key — currently `stackoverflow` only. An SO StackExchange key raises the SO API quota from the shared anonymous limit to the per-user quota. |
+
+Per-provider blocks live under `providers`, keyed by provider name (`stackoverflow`, `duckduckgo`, `wikipedia`, `npm`, `github`) — provider names are reserved.
+
+**Tool contract:** each search tool returns only its own provider's results. A provider failure surfaces as `Provider error (…)` or `Search cooling down …`, never as another provider's results; a genuine no-matches query returns 0 results. Rate-limit cooldowns (built-in per-provider defaults) are enforced and reported, not swallowed.
 
 ## Requirements
 
