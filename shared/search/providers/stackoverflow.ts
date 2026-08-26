@@ -1,6 +1,6 @@
 import { pickRandom, USER_AGENTS } from '../../user-agents';
 import { enqueue } from '../queue';
-import { RateLimitStore, DEFAULT_RATE_LIMIT_COOLDOWNS } from '../../rate-limit';
+import { rateLimitStore, DEFAULT_RATE_LIMIT_COOLDOWNS } from '../../rate-limit';
 import { SearchResult, ProviderConfig } from './base';
 
 // ─── StackOverflow API Error ─────────────────────────────────────────────────
@@ -15,7 +15,7 @@ export class StackOverflowAPIError extends Error {
 // ─── StackOverflow API Search ────────────────────────────────────────────────
 
 export async function searchStackOverflowAPI(query: string, config?: ProviderConfig, signal?: AbortSignal): Promise<SearchResult[]> {
-  const apiKey = config?.apiKey as string | undefined;
+  const soApiKey = (config?.providers as { stackoverflow?: { 'api-key'?: string } } | undefined)?.stackoverflow?.['api-key'];
   const params = new URLSearchParams({
     q: query,
     intitle: query,
@@ -27,8 +27,8 @@ export async function searchStackOverflowAPI(query: string, config?: ProviderCon
   });
 
   let url = `https://api.stackexchange.com/2.3/search?${params}`;
-  if (apiKey) {
-    url += `&key=${apiKey}`;
+  if (soApiKey) {
+    url += `&key=${soApiKey}`;
   }
 
   const res = await fetch(url, {
@@ -62,12 +62,11 @@ export async function searchStackOverflowAPI(query: string, config?: ProviderCon
 
 // ─── StackOverflow Scraper ───────────────────────────────────────────────────
 
-const rateLimitStore = new RateLimitStore();
-
 async function searchStackOverflowScraper(query: string, signal?: AbortSignal): Promise<SearchResult[]> {
   const url = `https://stackoverflow.com/search?q=${encodeURIComponent(query)}`;
 
   // Method 1: Try Jina Reader (handles Cloudflare)
+  let jinaAvailable = false;
   try {
     const jinaRes = await fetch(`https://r.jina.ai/${url}`, {
       signal,
@@ -79,12 +78,19 @@ async function searchStackOverflowScraper(query: string, signal?: AbortSignal): 
     });
 
     if (jinaRes.ok) {
+      jinaAvailable = true;
       const text = await jinaRes.text();
       const results = parseJinaHtml(text, url);
       if (results.length > 0) return results;
     }
   } catch {
-    // Jina failed, continue to fallback
+    // Jina request failed (network error) — handled below
+  }
+  if (!jinaAvailable) {
+    // Jina blocked or unreachable: the plain-fetch fallback below would
+    // almost certainly be Cloudflare-blocked too. Surface a visible
+    // provider error instead of a silent "No results found."
+    throw new Error('StackOverflow scraper unavailable');
   }
 
   // Method 2: Plain fetch with HTML parsing (may be blocked by Cloudflare)

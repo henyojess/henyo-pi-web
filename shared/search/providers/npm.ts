@@ -15,7 +15,7 @@ export async function searchNpm(query: string, signal?: AbortSignal): Promise<Se
         headers: { 'User-Agent': pickRandom(USER_AGENTS) },
       });
 
-      if (!res.ok) return [];
+      if (!res.ok) throw new Error(`npm registry HTTP ${res.status}`);
       const data = await res.json();
 
       return (data.objects || []).map((obj: any) => {
@@ -28,8 +28,10 @@ export async function searchNpm(query: string, signal?: AbortSignal): Promise<Se
           source: 'npm',
         };
       });
-    } catch {
-      return [];
+    } catch (err) {
+      // Re-throw: surface HTTP errors, network failures, and aborts —
+      // execute.ts distinguishes aborts from real failures.
+      throw err;
     }
   });
 }

@@ -68,7 +68,7 @@ describe('searchStackOverflow', () => {
     expect(results).toEqual([]);
   });
 
-  it('returns empty array on non-OK response', async () => {
+  it('rejects when Jina returns non-OK (visible error, not silent [])', async () => {
     vi.spyOn(global, 'fetch').mockImplementation(async (url: string) => {
       if (url.includes('api.stackexchange.com')) {
         return new Response(JSON.stringify({ items: [], quota_remaining: 0 }), {
@@ -78,8 +78,20 @@ describe('searchStackOverflow', () => {
       }
       return new Response('error', { status: 500 });
     });
-    const results = await searchStackOverflow('test');
-    expect(results).toEqual([]);
+    await expect(searchStackOverflow('test')).rejects.toThrow('StackOverflow scraper unavailable');
+  });
+
+  it('rejects when Jina request fails (fetch rejects) — not resolve []', async () => {
+    vi.spyOn(global, 'fetch').mockImplementation(async (url: string) => {
+      if (url.includes('api.stackexchange.com')) {
+        return new Response(JSON.stringify({ items: [], quota_remaining: 0 }), {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' },
+        });
+      }
+      throw new Error('Jina network error');
+    });
+    await expect(searchStackOverflow('test')).rejects.toThrow('StackOverflow scraper unavailable');
   });
 
   it('normalizes relative URLs to absolute', async () => {
@@ -208,6 +220,13 @@ describe('searchStackOverflowAPI', () => {
     await expect(searchStackOverflowAPI('test')).rejects.toThrow('StackOverflow API rate limited');
   });
 
+  it('throws on API HTTP error (e.g. 429 rate limit)', async () => {
+    vi.spyOn(global, 'fetch').mockImplementation(async () => {
+      return new Response('rate limited', { status: 429 });
+    });
+    await expect(searchStackOverflowAPI('test')).rejects.toThrow('StackOverflow API HTTP 429');
+  });
+
   it('includes intitle parameter in API URL', async () => {
     let capturedUrl = '';
     vi.spyOn(global, 'fetch').mockImplementation(async (url: string) => {
@@ -247,7 +266,7 @@ describe('searchStackOverflowAPI', () => {
         headers: { 'Content-Type': 'application/json' },
       });
     });
-    await searchStackOverflowAPI('query', { apiKey: 'abc123' });
+    await searchStackOverflowAPI('query', { providers: { stackoverflow: { 'api-key': 'abc123' } } });
     expect(capturedUrl).toContain('key=abc123');
   });
 

@@ -39,23 +39,21 @@ describe('searchWikipedia', () => {
     expect(results[0].source).toBe('wikipedia');
   });
 
-  it('returns empty array on HTTP error', async () => {
+  it('throws on HTTP error', async () => {
     vi.spyOn(global, 'fetch').mockImplementation(async () => {
       return new Response('error', { status: 500 });
     });
-    const results = await searchWikipedia('test');
-    expect(results).toEqual([]);
+    await expect(searchWikipedia('test')).rejects.toThrow('Wikipedia API HTTP 500');
   });
 
-  it('returns empty array on malformed JSON', async () => {
+  it('throws on malformed JSON', async () => {
     vi.spyOn(global, 'fetch').mockImplementation(async () => {
       return new Response('not json', {
         status: 200,
         headers: { 'Content-Type': 'application/json' },
       });
     });
-    const results = await searchWikipedia('test');
-    expect(results).toEqual([]);
+    await expect(searchWikipedia('test')).rejects.toThrow();
   });
 
   it('falls back to descriptions when no extract', async () => {
@@ -129,11 +127,10 @@ describe('searchWikipedia', () => {
 });
 
 describe('searchWikipedia — edge cases', () => {
-  it('returns empty array on network error', async () => {
+  it('throws on network error', async () => {
     vi.spyOn(global, 'fetch').mockImplementation(async () => {
       throw new Error('Network error');
     });
-    const results = await searchWikipedia('test');
-    expect(results).toEqual([]);
+    await expect(searchWikipedia('test')).rejects.toThrow('Network error');
   });
 });

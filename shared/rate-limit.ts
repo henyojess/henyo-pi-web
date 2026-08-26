@@ -64,6 +64,19 @@ export class RateLimitStore {
     return true;
   }
 
+  /** Milliseconds remaining in cooldown (0 when not in cooldown; deletes + persists expired entry) */
+  remainingMs(provider: string): number {
+    this.load();
+    const cooldownUntil = this.cooldowns.get(provider);
+    if (cooldownUntil === undefined) return 0;
+    if (Date.now() >= cooldownUntil) {
+      this.cooldowns.delete(provider);
+      this.save();
+      return 0;
+    }
+    return cooldownUntil - Date.now();
+  }
+
   /** Set cooldown for provider, duration in milliseconds */
   setCooldown(provider: string, durationMs: number): void {
     this.load();
@@ -87,6 +100,9 @@ export class RateLimitStore {
 }
 
 // ─── Default cooldowns ───────────────────────────────────────────────────────
+
+/** Module-level singleton — shared by all providers and execute.ts (avoids duplicate disk loads) */
+export const rateLimitStore = new RateLimitStore();
 
 export const DEFAULT_RATE_LIMIT_COOLDOWNS: Record<string, number> = {
   duckduckgo: 600_000,   // 600s

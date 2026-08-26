@@ -31,23 +31,28 @@ describe('searchNpm', () => {
     expect(results[0].source).toBe('npm');
   });
 
-  it('returns empty array on HTTP error', async () => {
+  it('throws on HTTP error', async () => {
     vi.spyOn(global, 'fetch').mockImplementation(async () => {
       return new Response('error', { status: 500 });
     });
-    const results = await searchNpm('test');
-    expect(results).toEqual([]);
+    await expect(searchNpm('test')).rejects.toThrow('npm registry HTTP 500');
   });
 
-  it('returns empty array on malformed JSON', async () => {
+  it('throws on 404 (no matches is a different thing)', async () => {
+    vi.spyOn(global, 'fetch').mockImplementation(async () => {
+      return new Response('not found', { status: 404 });
+    });
+    await expect(searchNpm('test')).rejects.toThrow('npm registry HTTP 404');
+  });
+
+  it('throws on malformed JSON', async () => {
     vi.spyOn(global, 'fetch').mockImplementation(async () => {
       return new Response('not json', {
         status: 200,
         headers: { 'Content-Type': 'application/json' },
       });
     });
-    const results = await searchNpm('test');
-    expect(results).toEqual([]);
+    await expect(searchNpm('test')).rejects.toThrow();
   });
 
   it('returns empty array when no objects key', async () => {
@@ -79,11 +84,10 @@ describe('searchNpm', () => {
 });
 
 describe('searchNpm — edge cases', () => {
-  it('returns empty array on network error', async () => {
+  it('throws on network error', async () => {
     vi.spyOn(global, 'fetch').mockImplementation(async () => {
       throw new Error('Network error');
     });
-    const results = await searchNpm('test');
-    expect(results).toEqual([]);
+    await expect(searchNpm('test')).rejects.toThrow('Network error');
   });
 });

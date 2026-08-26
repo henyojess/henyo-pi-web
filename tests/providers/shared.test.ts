@@ -360,6 +360,14 @@ describe('AbortSignal propagation', () => {
     let receivedSignal: AbortSignal | undefined;
     vi.spyOn(global, 'fetch').mockImplementation(async (url: string, init?: any) => {
       receivedSignal = init?.signal;
+      // Batch extract call needs a proper extract response (the opensearch
+      // array shape would now surface as a provider error, not be swallowed)
+      if (url.includes('action=query')) {
+        return new Response(WIKIPEDIA_EXTRACT_RESPONSE, {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' },
+        });
+      }
       return new Response(WIKIPEDIA_RESPONSE, {
         status: 200,
         headers: { 'Content-Type': 'application/json' },

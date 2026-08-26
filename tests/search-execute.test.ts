@@ -7,6 +7,9 @@ import { searchNpm } from '../shared/search/providers/npm';
 import { searchGitHub } from '../shared/search/providers/github';
 import { createSearchExecute } from '../shared/search/execute';
 import { rankResults, diversifyByDomain } from '../shared/format';
+import { rateLimitStore } from '../shared/rate-limit';
+import fs from 'node:fs';
+import { createHash } from 'node:crypto';
 
 vi.mock('../shared/user-agents', async (importOriginal) => {
   const actual = await importOriginal<typeof import('../shared/user-agents')>();
@@ -21,12 +24,47 @@ vi.mock('../shared/search/queue', async () => ({
   enqueue: async (_key: string, fn: () => Promise<any>) => fn(),
 }));
 
-vi.mock('../shared/rate-limit', () => ({
-  RateLimitStore: class {
-    setCooldown() {}
-  },
-  DEFAULT_RATE_LIMIT_COOLDOWNS: {},
-}));
+vi.mock('../shared/rate-limit', () => {
+  // In-memory Map-backed stand-in for the disk-backed RateLimitStore
+  class RateLimitStore {
+    cooldowns = new Map<string, number>();
+    setCooldown(provider: string, durationMs: number) {
+      this.cooldowns.set(provider, Date.now() + durationMs);
+    }
+    isCooldown(provider: string): boolean {
+      return this.remainingMs(provider) > 0;
+    }
+    remainingMs(provider: string): number {
+      const until = this.cooldowns.get(provider);
+      if (until === undefined) return 0;
+      if (Date.now() >= until) {
+        this.cooldowns.delete(provider);
+        return 0;
+      }
+      return until - Date.now();
+    }
+    clearExpired() {
+      const now = Date.now();
+      for (const [k, v] of this.cooldowns) {
+        if (now >= v) this.cooldowns.delete(k);
+      }
+    }
+  }
+  const rateLimitStore = new RateLimitStore();
+  return {
+    RateLimitStore,
+    rateLimitStore,
+    DEFAULT_RATE_LIMIT_COOLDOWNS: {
+      duckduckgo: 600_000,
+      stackoverflow: 300_000,
+      github: 300_000,
+      npm: 120_000,
+      wikipedia: 60_000,
+      jina: 120_000,
+    },
+    keyToPath: (dir: string, key: string) => `${dir}/${createHash('sha256').update(key).digest('hex')}.json`,
+  };
+});
 
 // ─── Test: each provider is callable ─────────────────────────────────────────
 
@@ -398,5 +436,135 @@ describe('provider query handling', () => {
     // Wikipedia sanitizes internally, so quotes should be stripped from opensearch call
     expect(calls[0]).toContain('search=React');
     expect(calls[0]).not.toContain('"');
+  });
+});
+
+// ─── Test: empty results are never cached or served (poisoned-cache fix) ────
+
+describe('empty results are never cached or served', () => {
+  const home = process.env.HOME || process.env.USERPROFILE || '';
+
+  it('(a) provider returns [] → nothing is cached; second call re-fires the provider', async () => {
+    const mockProvider = vi.fn().mockResolvedValue([] as SearchResult[]);
+    const executor = createSearchExecute(mockProvider, 'search_empty_a', true);
+    const signal = new AbortController().signal;
+
+    const r1 = await executor('id1', { query: 'empty-query' }, signal, undefined, {});
+    expect(r1.details.count).toBe(0);
+
+    const r2 = await executor('id2', { query: 'empty-query' }, signal, undefined, {});
+    // No cache hit — the provider must be re-fired
+    expect(mockProvider).toHaveBeenCalledTimes(2);
+    expect(r2.details).not.toHaveProperty('cached', true);
+
+    // And no cache file was written
+    const filePath = `${home}/.pi/tools-cache/search_empty_a/${createHash('sha256').update('search:search_empty_a:empty-query').digest('hex')}.json`;
+    expect(fs.existsSync(filePath)).toBe(false);
+  });
+
+  it('(b) a poisoned cached [] file is not served as a hit — provider re-fires', async () => {
+    const mockProvider = vi.fn().mockResolvedValue([
+      { title: 'Fresh', url: 'https://a.com', snippet: 's', domain: 'a.com' },
+    ] as SearchResult[]);
+    const executor = createSearchExecute(mockProvider, 'search_empty_b', true);
+
+    // Write a poisoned cache file exactly as the old code did
+    const dir = `${home}/.pi/tools-cache/search_empty_b`;
+    fs.mkdirSync(dir, { recursive: true });
+    const filePath = `${dir}/${createHash('sha256').update('search:search_empty_b:poisoned-query').digest('hex')}.json`;
+    fs.writeFileSync(filePath, JSON.stringify({ data: [], timestamp: Date.now() }), 'utf8');
+
+    try {
+      const result = await executor('id1', { query: 'poisoned-query' }, new AbortController().signal, undefined, {});
+      expect(mockProvider).toHaveBeenCalledTimes(1); // re-fired, not served from cache
+      expect(result.details.count).toBe(1);
+      expect(result.details).not.toHaveProperty('cached', true);
+    } finally {
+      fs.rmSync(dir, { recursive: true, force: true });
+    }
+  });
+});
+
+// ─── Test: rate-limit cooldown enforcement ──────────────────────────────────
+
+describe('rate-limit cooldown enforcement', () => {
+  it('(c) in-cooldown provider → "cooling down" text with seconds, provider not fired', async () => {
+    rateLimitStore.setCooldown('npm', 60_000);
+    const mockProvider = vi.fn().mockResolvedValue([
+      { title: 'X', url: 'https://x.com', snippet: 's', domain: 'x.com' },
+    ] as SearchResult[]);
+    const executor = createSearchExecute(mockProvider, 'search_npm', true);
+
+    const result = await executor('id', { query: 'cooling', noCache: true }, new AbortController().signal, undefined, {});
+
+    expect(mockProvider).not.toHaveBeenCalled();
+    expect(result.details.coolingDown).toBe(true);
+    expect(result.details.remainingMs).toBeGreaterThan(0);
+    expect(result.details.remainingMs).toBeLessThanOrEqual(60_000);
+    const text = result.content[0].text;
+    expect(text.startsWith('Search cooling down for')).toBe(true);
+    expect(text).toContain('60s');
+    expect(text).toContain('try again shortly');
+  });
+
+  it('(d) expired cooldown → provider fires normally', async () => {
+    rateLimitStore.setCooldown('npm', 50);
+    await new Promise(r => setTimeout(r, 80)); // let the 50ms cooldown expire
+    expect(rateLimitStore.remainingMs('npm')).toBe(0);
+
+    const mockProvider = vi.fn().mockResolvedValue([
+      { title: 'X', url: 'https://x.com', snippet: 's', domain: 'x.com' },
+    ] as SearchResult[]);
+    const executor = createSearchExecute(mockProvider, 'search_npm', true);
+
+    const result = await executor('id', { query: 'expired', noCache: true }, new AbortController().signal, undefined, {});
+
+    expect(mockProvider).toHaveBeenCalledTimes(1);
+    expect(result.details.count).toBe(1);
+    expect(result.details).not.toHaveProperty('coolingDown');
+  });
+});
+
+// ─── Test: visible provider errors (no silent "No results found.") ─────────
+
+describe('visible provider errors', () => {
+  it('(e) provider throws → "Provider error (tool)" text, not "No results found."', async () => {
+    const mockProvider = vi.fn().mockRejectedValue(new Error('GitHub API HTTP 500'));
+    const executor = createSearchExecute(mockProvider, 'search_github', false);
+
+    const result = await executor('id', { query: 'boom' }, new AbortController().signal, undefined, {});
+
+    const text = result.content[0].text;
+    expect(text).not.toBe('No results found.');
+    expect(text.startsWith('Provider error (search_github):')).toBe(true);
+    expect(text).toContain('GitHub API HTTP 500');
+    expect(result.details.count).toBe(0);
+    const providers = result.details.providers as Array<{ name: string; status: string }>;
+    expect(providers[0].status).toBe('error');
+  });
+
+  it('(f) provider throws + signal.aborted → "Search cancelled"', async () => {
+    const mockProvider = vi.fn().mockRejectedValue(new Error('AbortError'));
+    const controller = new AbortController();
+    controller.abort();
+    const executor = createSearchExecute(mockProvider, 'search_github', false);
+
+    const result = await executor('id', { query: 'cancel' }, controller.signal, undefined, {});
+
+    expect(result.content[0].text).toBe('Search cancelled');
+    expect(result.details.aborted).toBe(true);
+    const providers = result.details.providers as Array<{ name: string; status: string }>;
+    expect(providers[0].status).toBe('error');
+  });
+
+  it('(g) provider throws a non-Error value → error text still visible', async () => {
+    const mockProvider = vi.fn().mockRejectedValue('registry unavailable');
+    const executor = createSearchExecute(mockProvider, 'search_npm', true);
+
+    const result = await executor('id', { query: 'non-error-throw' }, new AbortController().signal, undefined, {});
+
+    const text = result.content[0].text;
+    expect(text.startsWith('Provider error (search_npm):')).toBe(true);
+    expect(text).toContain('registry unavailable');
   });
 });

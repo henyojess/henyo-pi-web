@@ -25,8 +25,7 @@ describe('loadConfig', () => {
     expect(config['henyo-fetch'].jinaEnabled).toBe(true);
     expect(config['henyo-fetch']['min-delay']).toBe(1000);
     expect(config['henyo-fetch']['max-delay']).toBe(3000);
-    expect(config['henyo-search'].contexts?.coding?.duckduckgo?.priority).toBe(1);
-    expect(config['henyo-search'].contexts?.general?.wikipedia?.priority).toBe(1);
+    expect(config['henyo-search']).toEqual({});
 
     fs.existsSync = origExistsSync;
   });
@@ -41,11 +40,7 @@ describe('loadConfig', () => {
         jinaEnabled: false,
       },
       'henyo-search': {
-        contexts: {
-          coding: {
-            npm: { priority: 0 },
-          },
-        },
+        trace: ['duckduckgo'],
       },
     };
 
@@ -65,13 +60,11 @@ describe('loadConfig', () => {
     // User overrides
     expect(config['henyo-fetch']['min-delay']).toBe(500);
     expect(config['henyo-fetch'].jinaEnabled).toBe(false);
-    expect(config['henyo-search'].contexts?.coding?.npm?.priority).toBe(0);
+    expect(config['henyo-search'].trace).toEqual(['duckduckgo']);
 
     // Preserved defaults
     expect(config['henyo-fetch']['max-delay']).toBe(3000);
     expect(config['henyo-fetch']['cache-max-files']).toBe(100);
-    expect(config['henyo-search'].contexts?.coding?.duckduckgo?.priority).toBe(1);
-    expect(config['henyo-search'].contexts?.general?.wikipedia?.priority).toBe(1);
 
     fs.existsSync = origExistsSync;
     fs.readFileSync = origReadFileSync;
@@ -116,100 +109,13 @@ describe('loadConfig', () => {
     fs.existsSync = origExistsSync;
   });
 
-  it('loads rate-limit-cooldowns from user settings', async () => {
-    const origExistsSync = fs.existsSync;
-    const origReadFileSync = fs.readFileSync;
-
-    const customSettings = {
-      'henyo-search': {
-        'rate-limit-cooldowns': { duckduckgo: 900_000 },
-      },
-    };
-
-    fs.existsSync = vi.fn((p: string) => {
-      if (p === settingsPath) return true;
-      return origExistsSync(p);
-    });
-
-    fs.readFileSync = vi.fn((p: string, enc: string) => {
-      if (p === settingsPath) return JSON.stringify(customSettings);
-      return origReadFileSync(p, enc);
-    });
-
-    const { loadConfig: freshLoad } = await import('../shared/config.ts');
-    const config = freshLoad();
-
-    expect(config['henyo-search']['rate-limit-cooldowns']).toEqual({ duckduckgo: 900_000 });
-
-    fs.existsSync = origExistsSync;
-    fs.readFileSync = origReadFileSync;
-  });
-
-  it('loads max-per-domain from user settings', async () => {
-    const origExistsSync = fs.existsSync;
-    const origReadFileSync = fs.readFileSync;
-
-    const customSettings = {
-      'henyo-search': {
-        'max-per-domain': 5,
-      },
-    };
-
-    fs.existsSync = vi.fn((p: string) => {
-      if (p === settingsPath) return true;
-      return origExistsSync(p);
-    });
-
-    fs.readFileSync = vi.fn((p: string, enc: string) => {
-      if (p === settingsPath) return JSON.stringify(customSettings);
-      return origReadFileSync(p, enc);
-    });
-
-    const { loadConfig: freshLoad } = await import('../shared/config.ts');
-    const config = freshLoad();
-
-    expect(config['henyo-search']['max-per-domain']).toBe(5);
-
-    fs.existsSync = origExistsSync;
-    fs.readFileSync = origReadFileSync;
-  });
-
-  it('loads ranking-enabled from user settings', async () => {
-    const origExistsSync = fs.existsSync;
-    const origReadFileSync = fs.readFileSync;
-
-    const customSettings = {
-      'henyo-search': {
-        'ranking-enabled': false,
-      },
-    };
-
-    fs.existsSync = vi.fn((p: string) => {
-      if (p === settingsPath) return true;
-      return origExistsSync(p);
-    });
-
-    fs.readFileSync = vi.fn((p: string, enc: string) => {
-      if (p === settingsPath) return JSON.stringify(customSettings);
-      return origReadFileSync(p, enc);
-    });
-
-    const { loadConfig: freshLoad } = await import('../shared/config.ts');
-    const config = freshLoad();
-
-    expect(config['henyo-search']['ranking-enabled']).toBe(false);
-
-    fs.existsSync = origExistsSync;
-    fs.readFileSync = origReadFileSync;
-  });
-
   it('loads api-key from user settings', async () => {
     const origExistsSync = fs.existsSync;
     const origReadFileSync = fs.readFileSync;
 
     const customSettings = {
       'henyo-search': {
-        'api-key': 'my-secret-key',
+        providers: { stackoverflow: { 'api-key': 'my-secret-key' } },
       },
     };
 
@@ -226,7 +132,36 @@ describe('loadConfig', () => {
     const { loadConfig: freshLoad } = await import('../shared/config.ts');
     const config = freshLoad();
 
-    expect(config['henyo-search']['api-key']).toBe('my-secret-key');
+    expect(config['henyo-search'].providers?.stackoverflow?.['api-key']).toBe('my-secret-key');
+
+    fs.existsSync = origExistsSync;
+    fs.readFileSync = origReadFileSync;
+  });
+
+  it('deep-merges nested providers.stackoverflow.api-key over defaults', async () => {
+    const origExistsSync = fs.existsSync;
+    const origReadFileSync = fs.readFileSync;
+
+    const customSettings = {
+      'henyo-search': {
+        providers: { stackoverflow: { 'api-key': 'x' } },
+      },
+    };
+
+    fs.existsSync = vi.fn((p: string) => {
+      if (p === settingsPath) return true;
+      return origExistsSync(p);
+    });
+
+    fs.readFileSync = vi.fn((p: string, enc: string) => {
+      if (p === settingsPath) return JSON.stringify(customSettings);
+      return origReadFileSync(p, enc);
+    });
+
+    const { loadConfig: freshLoad } = await import('../shared/config.ts');
+    const config = freshLoad();
+
+    expect(config['henyo-search'].providers?.stackoverflow?.['api-key']).toBe('x');
 
     fs.existsSync = origExistsSync;
     fs.readFileSync = origReadFileSync;

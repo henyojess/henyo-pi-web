@@ -114,6 +114,35 @@ describe('RateLimitStore', () => {
       expect(mockFs.writeFileSync).not.toHaveBeenCalled();
     });
   });
+
+  describe('remainingMs', () => {
+    it('returns 0 when no cooldown is set', () => {
+      vi.mocked(mockFs.readFileSync).mockReturnValue('{}');
+      const store = new RateLimitStore();
+      expect(store.remainingMs('duckduckgo')).toBe(0);
+    });
+
+    it('returns positive remaining time within cooldown', () => {
+      vi.mocked(mockFs.readFileSync).mockReturnValue(
+        JSON.stringify({ duckduckgo: Date.now() + 600_000 })
+      );
+      const store = new RateLimitStore();
+      const remaining = store.remainingMs('duckduckgo');
+      expect(remaining).toBeGreaterThan(0);
+      expect(remaining).toBeLessThanOrEqual(600_000);
+    });
+
+    it('returns 0 and removes entry when cooldown has expired', () => {
+      vi.mocked(mockFs.readFileSync).mockReturnValue(
+        JSON.stringify({ duckduckgo: Date.now() - 1000 })
+      );
+      const store = new RateLimitStore();
+      expect(store.remainingMs('duckduckgo')).toBe(0);
+      expect(mockFs.writeFileSync).toHaveBeenCalled();
+      const written = JSON.parse(vi.mocked(mockFs.writeFileSync).mock.calls?.[0][1] as string);
+      expect(written).not.toHaveProperty('duckduckgo');
+    });
+  });
 });
 
 describe('DEFAULT_RATE_LIMIT_COOLDOWNS', () => {

@@ -1,5 +1,6 @@
 import { pickRandom, USER_AGENTS } from '../../user-agents';
 import { enqueue } from '../queue';
+import { rateLimitStore, DEFAULT_RATE_LIMIT_COOLDOWNS } from '../../rate-limit';
 import { SearchResult } from './base';
 
 // ─── GitHub Provider ─────────────────────────────────────────────────────────
@@ -12,7 +13,12 @@ export async function searchGitHub(query: string, signal?: AbortSignal): Promise
         headers: { 'User-Agent': pickRandom(USER_AGENTS) },
       });
 
-      if (!res.ok) return [];
+      if (!res.ok) {
+        if (res.status === 403 || res.status === 429) {
+          rateLimitStore.setCooldown('github', DEFAULT_RATE_LIMIT_COOLDOWNS.github);
+        }
+        throw new Error(`GitHub API HTTP ${res.status}`);
+      }
       const data = await res.json();
 
       return (data.items || []).map((item: any) => ({
@@ -22,8 +28,10 @@ export async function searchGitHub(query: string, signal?: AbortSignal): Promise
         domain: 'github.com',
         source: 'github',
       }));
-    } catch {
-      return [];
+    } catch (err) {
+      // Re-throw: surface HTTP errors, network failures, and aborts —
+      // execute.ts distinguishes aborts from real failures.
+      throw err;
     }
   });
 }

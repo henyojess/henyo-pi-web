@@ -15,7 +15,7 @@ export async function searchWikipedia(query: string, signal?: AbortSignal): Prom
         `https://en.wikipedia.org/w/api.php?action=opensearch&search=${encodeURIComponent(wikiQuery)}&limit=10&format=json`,
         { signal, headers: { 'User-Agent': pickRandom(USER_AGENTS) } }
       );
-      if (!searchRes.ok) return [];
+      if (!searchRes.ok) throw new Error(`Wikipedia API HTTP ${searchRes.status}`);
       const searchData = await searchRes.json();
       const [titles, descriptions, urls] = searchData.slice(1);
 
@@ -64,8 +64,10 @@ export async function searchWikipedia(query: string, signal?: AbortSignal): Prom
       }
 
       return results;
-    } catch {
-      return [];
+    } catch (err) {
+      // Re-throw: surface search-call failures, network errors, and aborts.
+      // (Batch extract failures already fall back gracefully above.)
+      throw err;
     }
   });
 }

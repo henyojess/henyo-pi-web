@@ -1,4 +1,4 @@
-import { detectContext, buildProviderChain, CODING_SIGNALS } from '../shared/search/context';
+import { detectContext, CODING_SIGNALS } from '../shared/search/context';
 import { normalizeUrl, formatResults, diversifyByDomain, bm25Score, rankResults } from '../shared/format';
 import type { SearchResult } from '../shared/search/providers';
 
@@ -99,52 +99,6 @@ describe('detectContext', () => {
     expect(detectContext('select * from users')).toBe('coding');
     // Shell
     expect(detectContext('apt install curl')).toBe('coding');
-  });
-});
-
-// ─── buildProviderChain ──────────────────────────────────────────────────────
-
-describe('buildProviderChain', () => {
-  const contexts = {
-    coding: {
-      duckduckgo: { priority: 1 },
-      stackoverflow: { priority: 1 },
-      npm: { priority: 1 },
-      github: { priority: 1 },
-    },
-    general: {
-      duckduckgo: { priority: 1 },
-      wikipedia: { priority: 1 },
-    },
-  };
-
-  it('returns sorted providers for coding context', () => {
-    const chain = buildProviderChain('coding', contexts);
-    expect(chain.length).toBe(4);
-    expect(chain.every(p => p.priority === 1)).toBe(true);
-  });
-
-  it('returns sorted providers for general context', () => {
-    const chain = buildProviderChain('general', contexts);
-    expect(chain.length).toBe(2);
-    expect(chain.every(p => p.priority === 1)).toBe(true);
-  });
-
-  it('returns empty array for missing context', () => {
-    const chain = buildProviderChain('nonexistent', contexts);
-    expect(chain.length).toBe(0);
-  });
-
-  it('providers are sorted by priority', () => {
-    const mixedContexts = {
-      mixed: {
-        jina: { priority: 3 },
-        duckduckgo: { priority: 1 },
-        wikipedia: { priority: 2 },
-      },
-    };
-    const chain = buildProviderChain('mixed', mixedContexts);
-    expect(chain.map(p => p.priority)).toEqual([1, 2, 3]);
   });
 });
 

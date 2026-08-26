@@ -71,34 +71,31 @@ describe('searchDuckDuckGo', () => {
     expect(results).toEqual([]);
   });
 
-  it('returns empty array when all endpoints fail', async () => {
+  it('throws when all endpoints fail', async () => {
     vi.spyOn(global, 'fetch').mockImplementation(async () => {
       return new Response('error', { status: 500 });
     });
-    const results = await searchDuckDuckGo('test');
-    expect(results).toEqual([]);
+    await expect(searchDuckDuckGo('test')).rejects.toThrow('No endpoint succeeded');
   });
 
-  it('returns empty array on CAPTCHA detection', async () => {
+  it('throws on CAPTCHA detection (cooldown already set)', async () => {
     vi.spyOn(global, 'fetch').mockImplementation(async () => {
       return new Response(DDG_HTML_CAPTCHA, {
         status: 200,
         headers: { 'Content-Type': 'text/html' },
       });
     });
-    const results = await searchDuckDuckGo('test');
-    expect(results).toEqual([]);
+    await expect(searchDuckDuckGo('test')).rejects.toThrow('CAPTCHA');
   });
 
-  it('returns empty array on access denied', async () => {
+  it('throws on access denied (cooldown already set)', async () => {
     vi.spyOn(global, 'fetch').mockImplementation(async () => {
       return new Response(DDG_HTML_ACCESS_DENIED, {
         status: 200,
         headers: { 'Content-Type': 'text/html' },
       });
     });
-    const results = await searchDuckDuckGo('test');
-    expect(results).toEqual([]);
+    await expect(searchDuckDuckGo('test')).rejects.toThrow('CAPTCHA');
   });
 
   it('extracts title from result link', async () => {
@@ -235,8 +232,7 @@ describe('DDG CAPTCHA detection', () => {
         headers: { 'Content-Type': 'text/html' },
       });
     });
-    const results = await searchDuckDuckGo('test');
-    expect(results).toEqual([]);
+    await expect(searchDuckDuckGo('test')).rejects.toThrow('CAPTCHA');
   });
 
   it('detects access denied keyword', async () => {
@@ -246,15 +242,13 @@ describe('DDG CAPTCHA detection', () => {
         headers: { 'Content-Type': 'text/html' },
       });
     });
-    const results = await searchDuckDuckGo('test');
-    expect(results).toEqual([]);
+    await expect(searchDuckDuckGo('test')).rejects.toThrow('CAPTCHA');
   });
 
   it('detects HTTP 429 rate limit', async () => {
     vi.spyOn(global, 'fetch').mockImplementation(async () => {
       return new Response('Rate limited', { status: 429 });
     });
-    const results = await searchDuckDuckGo('test');
-    expect(results).toEqual([]);
+    await expect(searchDuckDuckGo('test')).rejects.toThrow('RATE_LIMITED');
   });
 });

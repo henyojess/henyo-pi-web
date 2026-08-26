@@ -1,12 +1,10 @@
 import { pickRandom, USER_AGENTS, ACCEPT_LANGUAGES } from '../../user-agents';
 import { enqueue } from '../queue';
-import { RateLimitStore, DEFAULT_RATE_LIMIT_COOLDOWNS } from '../../rate-limit';
+import { rateLimitStore, DEFAULT_RATE_LIMIT_COOLDOWNS } from '../../rate-limit';
 import { SearchResult, isCaptchaResponse, withRetry, extractDomain } from './base';
 import { shouldTrace, traceLog } from '../trace';
 
 // ─── DuckDuckGo Provider ─────────────────────────────────────────────────────
-
-const rateLimitStore = new RateLimitStore();
 
 export async function searchDuckDuckGo(query: string, signal?: AbortSignal): Promise<SearchResult[]> {
   const startTime = Date.now();
@@ -58,11 +56,11 @@ export async function searchDuckDuckGo(query: string, signal?: AbortSignal): Pro
         }
         throw new Error('No endpoint succeeded');
       }, 'duckduckgo');
-    } catch (err: any) {
-      if (err.message === 'RATE_LIMITED' || err.message === 'CAPTCHA') {
-        return [];
-      }
-      return [];
+    } catch (err) {
+      // Re-throw instead of a silent []: RATE_LIMITED / CAPTCHA (cooldown
+      // already set above) and 'No endpoint succeeded' (withRetry exhausted)
+      // surface as provider errors in execute.ts.
+      throw err;
     }
 
     if (!html) return [];

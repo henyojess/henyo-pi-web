@@ -2,17 +2,17 @@ import fs from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
 
-export interface ProviderConfig { priority?: number; url?: string; }
-export interface ContextConfig { [provider: string]: ProviderConfig; ranking?: boolean; }
-export interface WebSearchConfig {
-  'default-context'?: string;
-  contexts?: ContextConfig;
-  'rate-limit-cooldowns'?: Record<string, number>;
-  'max-per-domain'?: number;
+/** Per-provider settings (only `api-key` today — stackoverflow only) */
+export type SearchProviderSettings = {
   'api-key'?: string;
+};
+
+export type WebSearchConfig = {
   /** Trace logging: true for all providers, string[] for specific providers, undefined to disable */
   'trace'?: boolean | string[];
-}
+  /** Per-provider settings keyed by provider name (stackoverflow, duckduckgo, wikipedia, npm, github) */
+  providers?: Record<string, SearchProviderSettings>;
+};
 export interface WebFetchConfig {
   jinaEnabled?: boolean;
   'min-delay'?: number;
@@ -42,23 +42,7 @@ const DEFAULTS: Settings = {
     'jina-timeout': 30000,
     'max-response-size': 10485760,
   },
-  'henyo-search': {
-    'default-context': 'general',
-    contexts: {
-      coding: {
-        duckduckgo: { priority: 1 },
-        stackoverflow: { priority: 1 },
-        npm: { priority: 1 },
-        github: { priority: 1 },
-        ranking: true,
-      },
-      general: {
-        duckduckgo: { priority: 1 },
-        wikipedia: { priority: 1 },
-        ranking: true,
-      },
-    },
-  },
+  'henyo-search': {},
 };
 
 function deepClone<T>(obj: T): T {

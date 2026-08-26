@@ -1,6 +1,16 @@
 import { createCache } from '../cache';
+import { rateLimitStore } from '../rate-limit';
 import { SearchResult, sanitizeQuery, ProviderConfig } from './providers/base';
 import { formatResults, rankResults, diversifyByDomain } from '../format';
+
+// toolName → rate-limit provider key (maps to DEFAULT_RATE_LIMIT_COOLDOWNS keys)
+const TOOL_PROVIDER_KEYS: Record<string, string> = {
+  search_ddg: 'duckduckgo',
+  search_wikipedia: 'wikipedia',
+  search_stackoverflow: 'stackoverflow',
+  search_npm: 'npm',
+  search_github: 'github',
+};
 
 /** Get cache directory for a search tool */
 function getSearchCacheDir(toolName: string): string {
@@ -27,7 +37,7 @@ export function createSearchExecute(
     const cacheKey = `search:${toolName}:${query}`;
     if (!noCache) {
       const cached = cache.get(cacheKey);
-      if (cached) {
+      if (cached && cached.length > 0) {
         return {
           content: [{ type: "text", text: `[cache hit — ${cached.length} results]\n\n${formatResults(cached)}` }],
           details: { cached: true, count: cached.length, providers: [{ name: toolName, status: 'ok' as const }] },
@@ -38,6 +48,18 @@ export function createSearchExecute(
     // Sanitize or pass raw query depending on provider
     const searchQuery = needsSanitization ? sanitizeQuery(query) : query;
 
+    // Enforce rate-limit cooldown before firing (built-in durations only)
+    const providerKey = TOOL_PROVIDER_KEYS[toolName];
+    if (providerKey) {
+      const remaining = rateLimitStore.remainingMs(providerKey);
+      if (remaining > 0) {
+        return {
+          content: [{ type: "text", text: `Search cooling down for ${Math.ceil(remaining / 1000)}s — try again shortly or use a different search tool.` }],
+          details: { count: 0, coolingDown: true, remainingMs: remaining },
+        };
+      }
+    }
+
     const providerResults: Array<{ name: string; status: 'ok' | 'error' }> = [];
     let results: SearchResult[];
     try {
@@ -45,8 +67,16 @@ export function createSearchExecute(
       providerResults.push({ name: toolName, status: 'ok' });
     } catch (err: any) {
       providerResults.push({ name: toolName, status: 'error' });
+      if (signal?.aborted) {
+        // Abort fired mid-flight (fetch rejects with AbortError) — not a provider failure
+        return {
+          content: [{ type: "text", text: "Search cancelled" }],
+          details: { count: 0, aborted: true, providers: providerResults },
+        };
+      }
+      // Surface the provider failure visibly — never a silent "No results found."
       return {
-        content: [{ type: "text", text: "No results found." }],
+        content: [{ type: "text", text: `Provider error (${toolName}): ${err?.message ?? err} — no results returned. Try again later or use a different search tool.` }],
         details: { count: 0, providers: providerResults },
       };
     }
@@ -63,7 +93,7 @@ export function createSearchExecute(
       };
     }
 
-    if (!noCache) {
+    if (!noCache && results.length > 0) {
       cache.put(cacheKey, results);
     }
 

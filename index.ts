@@ -18,6 +18,7 @@ function log(...args: any[]) {
 }
 
 import { loadConfig, validateConfig } from "./shared/config";
+import { rateLimitStore } from "./shared/rate-limit";
 import { createCache } from "./shared/cache";
 import { searchDuckDuckGo } from "./shared/search/providers/duckduckgo";
 import { searchWikipedia } from "./shared/search/providers/wikipedia";
@@ -38,6 +39,7 @@ function getCacheDir(subdir: string): string {
 export default function (pi: ExtensionAPI) {
   const config = loadConfig();
   validateConfig(config);
+  rateLimitStore.clearExpired(); // session start: drop expired cooldown entries
 
   // --- Skill registration ---
   pi.on('resources_discover', async (_event, _ctx) => {

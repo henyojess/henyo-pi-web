@@ -1,12 +1,4 @@
-import { PROVIDER_MAP } from './providers';
-import type { SearchResult } from './providers';
-import type { ContextConfig } from '../config';
-
-export interface Provider {
-  name: string;
-  priority: number;
-  fn: (...args: any[]) => Promise<SearchResult[]>;
-}
+// ─── Coding context detection ────────────────────────────────────────────────
 
 // ─── Compound coding patterns (2+ tokens each) ──────────────────────────────
 // Each pattern requires multiple tokens to reduce false positives
@@ -122,18 +114,4 @@ export function detectContext(query: string): 'coding' | 'general' {
   if (strongMatches + weakMatches >= 2) return 'coding';
 
   return 'general';
-}
-
-export function buildProviderChain(contextName: string, contexts: ContextConfig): Provider[] {
-  const context = contexts[contextName] || {};
-  const providers: Provider[] = [];
-
-  for (const [name, cfg] of Object.entries(context)) {
-    if (cfg.priority !== undefined && PROVIDER_MAP[name]) {
-      providers.push({ name, priority: cfg.priority, fn: PROVIDER_MAP[name] });
-    }
-  }
-
-  providers.sort((a, b) => a.priority - b.priority);
-  return providers;
 }
