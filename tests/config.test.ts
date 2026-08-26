@@ -1,4 +1,4 @@
-import { loadConfig } from '../shared/config';
+import { loadConfig, validateConfig, type Settings } from '../shared/config';
 import fs from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
@@ -165,5 +165,23 @@ describe('loadConfig', () => {
 
     fs.existsSync = origExistsSync;
     fs.readFileSync = origReadFileSync;
+  });
+});
+
+describe('validateConfig', () => {
+  it('accepts a fully-populated settings object without throwing', () => {
+    const config: Settings = {
+      'henyo-search': {
+        trace: true,
+        providers: { stackoverflow: { 'api-key': 'x' } },
+      },
+      'henyo-fetch': { jinaEnabled: true, 'max-response-size': 1_048_576 },
+    };
+    expect(() => validateConfig(config)).not.toThrow();
+  });
+
+  it('runs both section validators on an empty config (no-op hooks today)', () => {
+    // validators are currently no-op hooks: even a junk shape does not throw
+    expect(() => validateConfig({ 'henyo-search': {}, 'henyo-fetch': {} } as Settings)).not.toThrow();
   });
 });

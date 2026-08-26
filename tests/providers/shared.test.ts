@@ -3,6 +3,8 @@ import { detectContext, CODING_SIGNALS } from '../../shared/search/context';
 import { sanitizeQuery } from '../../shared/search/providers';
 import { extractDomain } from '../../shared/search/providers/base';
 import { searchNpm, searchGitHub, searchWikipedia, searchJina, searchStackOverflowAPI } from '../../shared/search/providers';
+import { enqueue } from '../../shared/search/queue';
+import type { SearchResult } from '../../shared/search/providers/base';
 
 vi.mock('../../shared/user-agents', async (importOriginal) => {
   const actual = await importOriginal<typeof import('../../shared/user-agents')>();
@@ -406,5 +408,35 @@ describe('AbortSignal propagation', () => {
     const controller = new AbortController();
     await searchStackOverflowAPI('test', undefined, controller.signal);
     expect(receivedSignal).toBe(controller.signal);
+  });
+});
+
+describe('enqueue — per-provider serialization', () => {
+  it('queues a second concurrent call and resolves FIFO', async () => {
+    // delay() is mocked to resolve immediately, so the 2-5s inter-call delay is instant
+    const order: number[] = [];
+    let releaseFirst: () => void = () => {};
+    const gate = new Promise<void>((resolve) => { releaseFirst = resolve; });
+    const name = 'queue-fifo-test-provider';
+    const mk = (n: number, title: string): SearchResult => ({ title, url: `https://example.com/${n}`, snippet: 's', domain: 'example.com', source: name });
+
+    const first = enqueue(name, async () => {
+      await gate; // hold the provider so the second call must queue
+      order.push(1);
+      return [mk(1, 'first')];
+    });
+    // give the first call a tick to start (PROVIDER_RUNNING set) so the
+    // second call takes the queued (else) branch
+    await new Promise((r) => setTimeout(r, 5));
+    const second = enqueue(name, async () => {
+      order.push(2);
+      return [mk(2, 'second')];
+    });
+
+    releaseFirst();
+    const [r1, r2] = await Promise.all([first, second]);
+    expect(order).toEqual([1, 2]); // serialized: first finished before second started
+    expect(r1[0].title).toBe('first');
+    expect(r2[0].title).toBe('second');
   });
 });

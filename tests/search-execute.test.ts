@@ -568,3 +568,17 @@ describe('visible provider errors', () => {
     expect(text).toContain('registry unavailable');
   });
 });
+
+describe('diversifyByDomain — no-domain bucket', () => {
+  it('groups results without a domain into the noDomain bucket', () => {
+    const results: SearchResult[] = [
+      { title: 'a', url: 'https://a.example.com/1', snippet: '', source: 'test' },
+      { title: 'b', url: 'https://b.example.com/2', snippet: '', source: 'test' },
+      { title: 'c', url: 'https://c.example.com/3', snippet: '', source: 'test' },
+    ];
+    // > maxPerDomain (2) so the grouping loop runs; all lack `domain`
+    const out = diversifyByDomain(results, 2);
+    expect(out).toHaveLength(3);
+    expect(out.map((r) => r.title)).toEqual(['a', 'b', 'c']); // order preserved
+  });
+});

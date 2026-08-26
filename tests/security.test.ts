@@ -37,6 +37,12 @@ describe('isSafeUrl', () => {
       expect(isSafeUrl('http://localhost:3000')).toBe(false);
     });
 
+    it('blocks hostnames with a localhost. prefix (reaches the localhost-prefix check)', () => {
+      // plain 'localhost' is caught earlier by BLOCKED_HOSTNAMES; only the
+      // 'localhost.' prefix arm (startsWith) reaches line 62
+      expect(isSafeUrl('https://localhost.internal/secret')).toBe(false);
+    });
+
     it('blocks http://127.0.0.1', () => {
       expect(isSafeUrl('http://127.0.0.1')).toBe(false);
     });

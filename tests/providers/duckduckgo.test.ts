@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
+import * as fs from 'node:fs';
 import { searchDuckDuckGo } from '../../shared/search/providers';
 
 vi.mock('../../shared/user-agents', async (importOriginal) => {
@@ -250,5 +251,56 @@ describe('DDG CAPTCHA detection', () => {
       return new Response('Rate limited', { status: 429 });
     });
     await expect(searchDuckDuckGo('test')).rejects.toThrow('RATE_LIMITED');
+  });
+});
+
+describe('searchDuckDuckGo — abort signal & trace', () => {
+  afterEach(() => {
+    delete (globalThis as Record<string, unknown>).__henyoTraceConfig;
+    try {
+      fs.unlinkSync('/tmp/henyo-trace.log');
+    } catch {
+      // no file — fine
+    }
+    vi.restoreAllMocks();
+  });
+
+  it('aborts the in-flight endpoint fetch when the caller signal aborts mid-call', async () => {
+    // Endpoint 1 → 503 (continue to endpoint 2); endpoint 2 hangs until the
+    // internal controller aborts, like a real slow fetch would.
+    vi.spyOn(global, 'fetch').mockImplementation(async (url: string, init?: { signal?: AbortSignal }) => {
+      const u = String(url);
+      if (u.includes('html.duckduckgo.com')) {
+        return new Response('unavailable', { status: 503 });
+      }
+      if (u.includes('duckduckgo.com/html')) {
+        return new Promise<Response>((_resolve, reject) => {
+          const sig = init?.signal;
+          if (!sig) throw new Error('expected abort signal in fetch init');
+          if (sig.aborted) return reject(new Error('AbortError'));
+          sig.addEventListener('abort', () => reject(new Error('AbortError')), { once: true });
+        });
+      }
+      throw new Error('Unexpected fetch: ' + u);
+    });
+
+    const controller = new AbortController();
+    const p = searchDuckDuckGo('test', controller.signal);
+    // let endpoint 1 (503) be consumed and the abort listener registered
+    await new Promise((r) => setTimeout(r, 10));
+    controller.abort();
+    // withRetry (delay mocked → immediate) exhausts retries, provider rethrows
+    await expect(p).rejects.toThrow('AbortError');
+  });
+
+  it('writes a trace log line when __henyoTraceConfig is enabled', async () => {
+    (globalThis as Record<string, unknown>).__henyoTraceConfig = true;
+    vi.spyOn(global, 'fetch').mockImplementation(async () =>
+      new Response(DDG_HTML_WITH_RESULTS, { status: 200, headers: { 'Content-Type': 'text/html' } }),
+    );
+    const results = await searchDuckDuckGo('trace ddg query');
+    expect(results.length).toBeGreaterThan(0);
+    const content = fs.readFileSync('/tmp/henyo-trace.log', 'utf-8');
+    expect(content).toContain('trace ddg query');
   });
 });

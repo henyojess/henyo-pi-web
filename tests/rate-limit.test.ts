@@ -76,6 +76,18 @@ describe('RateLimitStore', () => {
       const written = JSON.parse(vi.mocked(mockFs.writeFileSync).mock.calls?.[0][1] as string);
       expect(written.duckduckgo).toBeGreaterThan(Date.now() + 400_000);
     });
+
+    it('creates the rate-limit directory when it is missing', () => {
+      // existsSync false for both the file (load skips) and the dir (ensureDir mkdir)
+      vi.mocked(mockFs.existsSync).mockReturnValue(false);
+      const store = new RateLimitStore();
+      store.setCooldown('duckduckgo', 600_000);
+
+      expect(mockFs.mkdirSync).toHaveBeenCalled();
+      // written to the rate-limit file path
+      const call = vi.mocked(mockFs.writeFileSync).mock.calls?.[0];
+      expect(call?.[1]).toContain('duckduckgo');
+    });
   });
 
   describe('clearExpired', () => {
