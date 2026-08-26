@@ -1,4 +1,4 @@
-import { fetchPage } from '../shared/fetch/pipeline';
+import { fetchPage, formatSize } from '../shared/fetch/pipeline';
 import type { WebFetchConfig } from '../shared/config';
 
 // Mock extract and github modules to avoid real network calls
@@ -376,5 +376,149 @@ describe('fetchPage', () => {
     expect(result.oversized).toBe(true);
     expect(result.contentLength).toBe(largeContent.length);
     expect(result.cacheFilePath).toBeDefined();
+  });
+
+  // ─── max-response-size ───────────────────────────────────────────────
+
+  it('rejects early when Content-Length header exceeds max-response-size', async () => {
+    mockFetch(async () => new Response('tiny', {
+      status: 200,
+      headers: { 'Content-Length': '99999999', 'Content-Type': 'text/html' },
+    }));
+    const result = await fetchPage({
+      url: 'https://example.com/big-header',
+      timeout: 10000,
+      noCache: false,
+      config,
+    });
+    expect(result.source).toBe('size-exceeded');
+    expect(result.text).toContain('exceeded max-response-size limit of 10485760 bytes');
+  });
+
+  it('rejects mid-stream when streamed body exceeds max-response-size (no Content-Length)', async () => {
+    const stream = new ReadableStream({
+      start(controller) {
+        controller.enqueue(new Uint8Array(60));
+        controller.enqueue(new Uint8Array(60));
+        controller.enqueue(new Uint8Array(60)); // 180 total > 100 limit
+        controller.close();
+      },
+    });
+    mockFetch(async () => new Response(stream, { status: 200 }));
+    const result = await fetchPage({
+      url: 'https://example.com/stream-big',
+      timeout: 10000,
+      noCache: false,
+      config: { ...config, 'max-response-size': 100 },
+    });
+    expect(result.source).toBe('size-exceeded');
+    expect(result.text).toContain('exceeded max-response-size limit of 100 bytes');
+    expect(result.sizeLabel).toBeDefined();
+  });
+
+  it('re-throws non-size stream errors', async () => {
+    let sent = false;
+    const badStream = new ReadableStream({
+      pull(controller) {
+        if (!sent) { sent = true; controller.enqueue(new Uint8Array(10)); return; }
+        throw new Error('network blip');
+      },
+    });
+    mockFetch(async () => new Response(badStream, { status: 200 }));
+    await expect(fetchPage({
+      url: 'https://example.com/stream-err',
+      timeout: 10000,
+      noCache: true,
+      config: { ...config, 'max-response-size': 1000 },
+    })).rejects.toThrow('network blip');
+  });
+
+  // ─── Title fallback ────────────────────────────────────────────────────
+
+  const defuddleOk = (title: string) => ({
+    bodyText: 'This content is long enough to pass the quality threshold for extraction and be considered a valid result by the pipeline with a proper structure.',
+    title,
+    author: '', description: '', date: '', lang: '',
+  });
+
+  it('derives the title from the URL path when Defuddle returns an empty title', async () => {
+    mockHtmlFetch();
+    (extractWithDefuddle as any).mockResolvedValue(defuddleOk(''));
+    // Keep Jina out of the way so the extraction result keeps an empty title
+    (fetchWithJina as any).mockRejectedValue(new Error('jina unused in this test'));
+    const result = await fetchPage({
+      url: 'https://example.com/docs/my_report_v2.pdf',
+      timeout: 10000,
+      noCache: true,
+      config,
+    });
+    expect(result.title).toBe('My Report V2.Pdf');
+  });
+
+  it('derives the title from the URL path when Defuddle returns "Untitled"', async () => {
+    mockHtmlFetch();
+    (extractWithDefuddle as any).mockResolvedValue(defuddleOk('Untitled'));
+    (fetchWithJina as any).mockRejectedValue(new Error('jina unused in this test'));
+    const result = await fetchPage({
+      url: 'https://example.com/docs/my_report_v2.pdf',
+      timeout: 10000,
+      noCache: true,
+      config,
+    });
+    expect(result.title).toBe('My Report V2.Pdf');
+  });
+
+  it('derives the title from the URL path when Defuddle returns a bare URL as title', async () => {
+    mockHtmlFetch();
+    (extractWithDefuddle as any).mockResolvedValue(defuddleOk('https://example.com'));
+    (fetchWithJina as any).mockRejectedValue(new Error('jina unused in this test'));
+    const result = await fetchPage({
+      url: 'https://example.com/docs/my_report_v2.pdf',
+      timeout: 10000,
+      noCache: true,
+      config,
+    });
+    expect(result.title).toBe('My Report V2.Pdf');
+  });
+
+  // ─── Misc small branches ────────────────────────────────────────────────
+
+  it('falls back to res.text() when the response has no body reader', async () => {
+    mockFetch(async () => new Response(null, { status: 200, headers: { 'Content-Type': 'text/html' } }));
+    (extractWithDefuddle as any).mockResolvedValue(defuddleOk('No Body'));
+    const result = await fetchPage({
+      url: 'https://example.com/no-body-reader',
+      timeout: 10000,
+      noCache: true,
+      config,
+    });
+    expect(result.source).toBe('defuddle');
+    expect(result.title).toBe('No Body');
+  });
+
+  it('rejects unsupported protocols with the SSRF message', async () => {
+    await expect(fetchPage({ url: 'file:///etc/passwd', timeout: 1000, noCache: true, config }))
+      .rejects.toThrow("SSRF protection blocked request to file:///etc/passwd: unsupported protocol 'file:'");
+  });
+
+  it('rejects unsafe URLs (private IP) before fetching', async () => {
+    await expect(fetchPage({ url: 'https://10.0.0.5/x', timeout: 1000, noCache: true, config }))
+      .rejects.toThrow('ssrf blocked');
+  });
+});
+
+describe('formatSize', () => {
+  it('formats KB sizes', () => {
+    const kb = formatSize(512);
+    expect(kb.sizeLabel).toBe('0.5 KB');
+    expect(kb.contentLengthKB).toBe(0.5);
+  });
+
+  it('formats MB sizes', () => {
+    const mb = formatSize(2 * 1024 * 1024);
+    expect(mb.sizeLabel).toBe('2 MB');
+    // NB: the MB branch stores the MB value in the (misleadingly named)
+    // contentLengthKB field — asserting actual behavior, not the name
+    expect(mb.contentLengthKB).toBe(2);
   });
 });
