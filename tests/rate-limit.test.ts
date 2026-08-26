@@ -142,6 +142,19 @@ describe('RateLimitStore', () => {
       const written = JSON.parse(vi.mocked(mockFs.writeFileSync).mock.calls?.[0][1] as string);
       expect(written).not.toHaveProperty('duckduckgo');
     });
+
+    it('re-reads the file on every call (external writes visible without restart)', () => {
+      // Simulates a long-lived process: one store instance, file starts empty
+      vi.mocked(mockFs.readFileSync).mockReturnValue('{}');
+      const store = new RateLimitStore();
+      expect(store.remainingMs('github')).toBe(0);
+
+      // Another process writes a cooldown to the file
+      vi.mocked(mockFs.readFileSync).mockReturnValue(
+        JSON.stringify({ github: Date.now() + 300_000 })
+      );
+      expect(store.remainingMs('github')).toBeGreaterThan(0);
+    });
   });
 });
 

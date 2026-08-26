@@ -15,7 +15,6 @@ const RATE_LIMIT_DIR = path.join(
 
 export class RateLimitStore {
   private cooldowns: Map<string, number> = new Map();
-  private initialized = false;
 
   private getDir(): string {
     return path.dirname(RATE_LIMIT_DIR);
@@ -28,8 +27,12 @@ export class RateLimitStore {
     }
   }
 
+  /**
+   * Re-read from disk on every call — a small local file, and re-reading keeps
+   * the store visible across processes (manual cooldown writes, other pi
+   * sessions) without a restart. Last writer wins on concurrent writes.
+   */
   private load(): void {
-    if (this.initialized) return;
     try {
       if (fs.existsSync(RATE_LIMIT_DIR)) {
         const raw = fs.readFileSync(RATE_LIMIT_DIR, 'utf8');
@@ -39,7 +42,6 @@ export class RateLimitStore {
     } catch {
       // Ignore parse errors, start fresh
     }
-    this.initialized = true;
   }
 
   private save(): void {
