@@ -277,6 +277,7 @@ Write to `research-report.md`:
 - For academic papers: Include arXiv ID, DOI, or preprint link
 - For web pages: Include full URL and access date
 - For social media: Include author handle, date, and URL
+- **Dates are checked, never guessed:** the current date is NOT in your context — model-recalled dates are fabricated. Run `date +%F` and use its output for any date *you* write (report date, date of assessment). Citation dates are source metadata — leave them as found.
 
 ## Execution Notes
 

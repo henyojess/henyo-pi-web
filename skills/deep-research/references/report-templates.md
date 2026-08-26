@@ -5,7 +5,7 @@
 ```markdown
 # <Title> — Executive Brief
 
-**Date:** <date>
+**Date:** <run `date +%F` — never guess>
 **Topic:** <topic>
 **Research Scope:** <what was covered>
 

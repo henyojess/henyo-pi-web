@@ -118,7 +118,7 @@ For claims requiring multiple sources:
 
 **Verdict:** Consensus / Divided / Unverified
 **Confidence:** High / Medium / Low
-**Date of assessment:** <today>
+**Date of assessment:** <run `date +%F` — never guess>
 ```
 
 ## Practical Tips
