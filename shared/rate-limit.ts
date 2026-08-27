@@ -53,19 +53,6 @@ export class RateLimitStore {
     fs.writeFileSync(RATE_LIMIT_DIR, JSON.stringify(obj), 'utf8');
   }
 
-  /** Check if provider is currently in cooldown */
-  isCooldown(provider: string): boolean {
-    this.load();
-    const cooldownUntil = this.cooldowns.get(provider);
-    if (cooldownUntil === undefined) return false;
-    if (Date.now() >= cooldownUntil) {
-      this.cooldowns.delete(provider);
-      this.save();
-      return false;
-    }
-    return true;
-  }
-
   /** Milliseconds remaining in cooldown (0 when not in cooldown; deletes + persists expired entry) */
   remainingMs(provider: string): number {
     this.load();

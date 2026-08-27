@@ -18,9 +18,6 @@ vi.mock('../../shared/rate-limit', () => {
     setCooldown(provider: string, durationMs: number) {
       this.cooldowns.set(provider, Date.now() + durationMs);
     }
-    isCooldown(provider: string): boolean {
-      return this.remainingMs(provider) > 0;
-    }
     remainingMs(provider: string): number {
       const until = this.cooldowns.get(provider);
       if (until === undefined) return 0;
@@ -74,7 +71,7 @@ describe('searchGitHub', () => {
       return new Response('rate limited', { status: 403 });
     });
     await expect(searchGitHub('test')).rejects.toThrow('GitHub API HTTP 403');
-    expect(rateLimitStore.isCooldown('github')).toBe(true);
+    expect(rateLimitStore.remainingMs('github')).toBeGreaterThan(0);
   });
 
   it('throws on malformed JSON', async () => {

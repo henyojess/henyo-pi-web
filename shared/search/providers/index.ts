@@ -1,4 +1,4 @@
-import type { SearchResult, SearchProvider, ProviderDefinition, ProviderFn, ProviderConfig } from './base';
+import type { SearchResult, ProviderConfig } from './base';
 import { extractDomain, sanitizeQuery } from './base';
 import { searchDuckDuckGo } from './duckduckgo';
 import { searchStackOverflow, StackOverflowAPIError, searchStackOverflowAPI } from './stackoverflow';
@@ -8,9 +8,6 @@ import { searchWikipedia } from './wikipedia';
 // Re-export all provider functions and types
 export type {
   SearchResult,
-  SearchProvider,
-  ProviderDefinition,
-  ProviderFn,
   ProviderConfig,
 };
 export {
@@ -23,14 +20,4 @@ export {
   searchWikipedia,
   extractDomain,
   sanitizeQuery,
-};
-
-// ─── Provider map ────────────────────────────────────────────────────────────
-
-export const PROVIDER_MAP: Record<string, ProviderFn> = {
-  duckduckgo: searchDuckDuckGo,
-  stackoverflow: searchStackOverflow,
-  npm: searchNpm,
-  github: searchGitHub,
-  wikipedia: searchWikipedia,
 };

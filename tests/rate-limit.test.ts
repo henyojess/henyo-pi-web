@@ -27,33 +27,6 @@ describe('RateLimitStore', () => {
     vi.mocked(mockFs.mkdirSync).mockReturnValue();
   });
 
-  describe('isCooldown', () => {
-    it('returns false when no cooldown is set', () => {
-      vi.mocked(mockFs.readFileSync).mockReturnValue('{}');
-      const store = new RateLimitStore();
-      expect(store.isCooldown('duckduckgo')).toBe(false);
-    });
-
-    it('returns true when within cooldown', () => {
-      vi.mocked(mockFs.readFileSync).mockReturnValue(
-        JSON.stringify({ duckduckgo: Date.now() + 600_000 })
-      );
-      const store = new RateLimitStore();
-      expect(store.isCooldown('duckduckgo')).toBe(true);
-    });
-
-    it('returns false and removes entry when cooldown has expired', () => {
-      vi.mocked(mockFs.readFileSync).mockReturnValue(
-        JSON.stringify({ duckduckgo: Date.now() - 1000 })
-      );
-      const store = new RateLimitStore();
-      expect(store.isCooldown('duckduckgo')).toBe(false);
-      expect(mockFs.writeFileSync).toHaveBeenCalled();
-      const written = JSON.parse(vi.mocked(mockFs.writeFileSync).mock.calls?.[0][1] as string);
-      expect(written).not.toHaveProperty('duckduckgo');
-    });
-  });
-
   describe('setCooldown', () => {
     it('sets cooldown and persists to disk', () => {
       const store = new RateLimitStore();

@@ -31,9 +31,6 @@ vi.mock('../shared/rate-limit', () => {
     setCooldown(provider: string, durationMs: number) {
       this.cooldowns.set(provider, Date.now() + durationMs);
     }
-    isCooldown(provider: string): boolean {
-      return this.remainingMs(provider) > 0;
-    }
     remainingMs(provider: string): number {
       const until = this.cooldowns.get(provider);
       if (until === undefined) return 0;
