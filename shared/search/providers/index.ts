@@ -5,7 +5,6 @@ import { searchStackOverflow, StackOverflowAPIError, searchStackOverflowAPI } fr
 import { searchNpm } from './npm';
 import { searchGitHub } from './github';
 import { searchWikipedia } from './wikipedia';
-import { searchJina } from './jina';
 // Re-export all provider functions and types
 export type {
   SearchResult,
@@ -22,7 +21,6 @@ export {
   searchNpm,
   searchGitHub,
   searchWikipedia,
-  searchJina,
   extractDomain,
   sanitizeQuery,
 };
@@ -35,5 +33,4 @@ export const PROVIDER_MAP: Record<string, ProviderFn> = {
   npm: searchNpm,
   github: searchGitHub,
   wikipedia: searchWikipedia,
-  jina: searchJina,
 };

@@ -2,7 +2,7 @@ import { describe, it, expect, vi } from 'vitest';
 import { detectContext, CODING_SIGNALS } from '../../shared/search/context';
 import { sanitizeQuery } from '../../shared/search/providers';
 import { extractDomain } from '../../shared/search/providers/base';
-import { searchNpm, searchGitHub, searchWikipedia, searchJina, searchStackOverflowAPI } from '../../shared/search/providers';
+import { searchNpm, searchGitHub, searchWikipedia, searchStackOverflowAPI } from '../../shared/search/providers';
 import { enqueue } from '../../shared/search/queue';
 import type { SearchResult } from '../../shared/search/providers/base';
 
@@ -225,16 +225,6 @@ export const WIKIPEDIA_EXTRACT_RESPONSE = JSON.stringify({
   },
 });
 
-export const JINA_RESPONSE = JSON.stringify({
-  results: [
-    {
-      title: 'Jina Search Result',
-      url: 'https://jina.ai/search',
-      content: '<p>This is the search result content.</p>',
-    },
-  ],
-});
-
 // ─── Shared Tests ────────────────────────────────────────────────────────────
 
 describe('detectContext edge cases', () => {
@@ -379,20 +369,6 @@ describe('AbortSignal propagation', () => {
     const controller = new AbortController();
     await searchWikipedia('test', controller.signal);
     expect(receivedSignal).toBe(controller.signal);
-  });
-
-  it('Jina accepts signal parameter without error', async () => {
-    vi.spyOn(global, 'fetch').mockImplementation(async () => {
-      return new Response(JINA_RESPONSE, {
-        status: 200,
-        headers: { 'Content-Type': 'application/json' },
-      });
-    });
-
-    const controller = new AbortController();
-    // Should not throw — signal is connected to internal controller
-    const results = await searchJina('test', controller.signal);
-    expect(results.length).toBeGreaterThan(0);
   });
 
   it('StackOverflow API passes signal to fetch', async () => {

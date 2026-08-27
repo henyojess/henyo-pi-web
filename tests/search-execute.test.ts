@@ -60,7 +60,6 @@ vi.mock('../shared/rate-limit', () => {
       github: 300_000,
       npm: 120_000,
       wikipedia: 60_000,
-      jina: 120_000,
     },
     keyToPath: (dir: string, key: string) => `${dir}/${createHash('sha256').update(key).digest('hex')}.json`,
   };

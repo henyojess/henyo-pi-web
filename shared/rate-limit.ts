@@ -112,7 +112,6 @@ export const DEFAULT_RATE_LIMIT_COOLDOWNS: Record<string, number> = {
   github: 300_000,       // 300s
   npm: 120_000,          // 120s
   wikipedia: 60_000,     // 60s
-  jina: 120_000,         // 120s
 };
 
 export function keyToPath(dir: string, key: string): string {

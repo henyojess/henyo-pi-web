@@ -177,7 +177,6 @@ describe('DEFAULT_RATE_LIMIT_COOLDOWNS', () => {
     expect(DEFAULT_RATE_LIMIT_COOLDOWNS).toHaveProperty('github');
     expect(DEFAULT_RATE_LIMIT_COOLDOWNS).toHaveProperty('npm');
     expect(DEFAULT_RATE_LIMIT_COOLDOWNS).toHaveProperty('wikipedia');
-    expect(DEFAULT_RATE_LIMIT_COOLDOWNS).toHaveProperty('jina');
   });
 
   it('has correct cooldown values in milliseconds', () => {
@@ -186,7 +185,6 @@ describe('DEFAULT_RATE_LIMIT_COOLDOWNS', () => {
     expect(DEFAULT_RATE_LIMIT_COOLDOWNS.github).toBe(300_000);
     expect(DEFAULT_RATE_LIMIT_COOLDOWNS.npm).toBe(120_000);
     expect(DEFAULT_RATE_LIMIT_COOLDOWNS.wikipedia).toBe(60_000);
-    expect(DEFAULT_RATE_LIMIT_COOLDOWNS.jina).toBe(120_000);
   });
 
   it('all values are positive numbers', () => {
