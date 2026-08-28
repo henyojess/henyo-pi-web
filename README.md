@@ -141,7 +141,7 @@ Routing and usage guide for the six web research tools: the tool routing matrix,
 
 ## Configuration
 
-Optional settings go in `~/.pi/settings.json`:
+Optional settings go in `~/.pi/agent/settings.json` (shared with the rest of pi's settings):
 
 ```json
 {

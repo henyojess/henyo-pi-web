@@ -4,7 +4,7 @@ import path from 'node:path';
 import os from 'node:os';
 
 describe('loadConfig', () => {
-  const settingsPath = path.join(os.homedir(), '.pi', 'settings.json');
+  const settingsPath = path.join(os.homedir(), '.pi', 'agent', 'settings.json');
 
   afterEach(() => {
     // Reset the cached settings between tests by deleting the module's cache

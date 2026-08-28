@@ -29,7 +29,7 @@ export interface Settings {
 }
 
 const HOME = os.homedir();
-const SETTINGS_PATH = path.join(HOME, '.pi', 'settings.json');
+const SETTINGS_PATH = path.join(HOME, '.pi', 'agent', 'settings.json');
 
 const DEFAULTS: Settings = {
   'henyo-fetch': {
