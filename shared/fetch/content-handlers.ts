@@ -50,8 +50,12 @@ export async function handleContent(options: {
       if (jsonLength > contentThreshold) {
         const cacheFilePath = keyToPath(getCacheDir('henyo_fetch'), cacheKey);
         const sizeInfo = formatSize(jsonLength);
+        // Keep the full JSON in `text` (same as the oversized HTML branch) so
+        // the cache file at cacheFilePath is greppable. The tool layer renders
+        // only the metadata envelope for oversized results, so this does not
+        // bloat agent context.
         const fetchResult: FetchResult = {
-          text: `JSON response exceeded content-threshold limit of ${contentThreshold} characters.`,
+          text: jsonStr,
           resolvedUrl, title: '', source: 'json', truncated: false,
           contentLengthKB: sizeInfo.contentLengthKB, sizeLabel: sizeInfo.sizeLabel,
           cacheKey, cacheFilePath, contentLength: jsonLength,

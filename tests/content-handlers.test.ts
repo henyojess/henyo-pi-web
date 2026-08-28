@@ -1,4 +1,9 @@
 import { handleContent } from '../shared/fetch/content-handlers';
+import { createCache } from '../shared/cache';
+import { keyToPath } from '../shared/rate-limit';
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -97,11 +102,14 @@ describe('handleContent — JSON', () => {
 
   it('marks oversized JSON with size-exceeded and a cache file path', async () => {
     const cache = makeCache();
+    const body = '{"k":"' + 'a'.repeat(200) + '"}';
     const result = await handleContent(
-      options({ body: '{"k":"' + 'a'.repeat(200) + '"}', contentType: 'application/json', contentThreshold: 10, cache }),
+      options({ body, contentType: 'application/json', contentThreshold: 10, cache }),
     );
     expect(result!.source).toBe('json');
-    expect(result!.text).toBe('JSON response exceeded content-threshold limit of 10 characters.');
+    // Regression: oversized JSON must keep the full formatted body (not a
+    // placeholder message) so the cache file at cacheFilePath is greppable.
+    expect(result!.text).toBe(JSON.stringify(JSON.parse(body), null, 2));
     expect(result!.oversized).toBe(true);
     expect(result!.errorCategory).toBe('size-exceeded');
     expect(result!.cacheFilePath).toMatch(/\.json$/);
@@ -111,11 +119,50 @@ describe('handleContent — JSON', () => {
 
   it('does not cache oversized JSON when noCache is set', async () => {
     const cache = makeCache();
+    const body = '{"k":"' + 'a'.repeat(200) + '"}';
     const result = await handleContent(
-      options({ body: '{"k":"' + 'a'.repeat(200) + '"}', contentType: 'application/json', contentThreshold: 10, noCache: true, cache }),
+      options({ body, contentType: 'application/json', contentThreshold: 10, noCache: true, cache }),
     );
     expect(result!.oversized).toBe(true);
+    expect(result!.text).toBe(JSON.stringify(JSON.parse(body), null, 2));
     expect(cache.put).not.toHaveBeenCalled();
+  });
+
+  it('caches the full JSON (not a placeholder) so the entry stays greppable', async () => {
+    const cache = makeCache();
+    const raw = '{"name":"yaml","downloads":800000000,"versions":{"1.0.0":"2020-01-01","2.9.0":"2026-05-11"}}';
+    const result = await handleContent(
+      options({ body: raw, contentType: 'application/json', contentThreshold: 10, cache }),
+    );
+    const formatted = JSON.stringify(JSON.parse(raw), null, 2);
+    expect(result!.oversized).toBe(true);
+    expect(result!.text).toBe(formatted);
+    const cachedEntry = cache.put.mock.calls[0]![1] as { text?: string };
+    expect(cachedEntry.text).toBe(formatted);
+    expect(JSON.stringify(cachedEntry)).not.toContain('exceeded content-threshold');
+  });
+
+  it('writes a greppable cache file on disk for oversized JSON (regression)', async () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'henyo-fetch-'));
+    try {
+      const cache = createCache(dir, 3600);
+      const raw = '{"name":"yaml","downloads":800000000}';
+      const result = await handleContent(
+        options({ body: raw, contentType: 'application/json', contentThreshold: 10, cache }),
+      );
+      expect(result!.oversized).toBe(true);
+      const file = keyToPath(dir, 'fetch:https://example.com/doc');
+      const onDisk = fs.readFileSync(file, 'utf8');
+      // The exact smoke-test failure mode: the file must contain the actual
+      // payload (greppable) and the full body must be recoverable from the
+      // entry — not just an envelope with a placeholder message.
+      expect(onDisk).toContain('800000000');
+      const entry = JSON.parse(onDisk) as { data: { text: string } };
+      expect(entry.data.text).toBe(JSON.stringify(JSON.parse(raw), null, 2));
+      expect(onDisk).not.toContain('exceeded content-threshold');
+    } finally {
+      fs.rmSync(dir, { recursive: true, force: true });
+    }
   });
 
   it('falls through to null when the JSON body fails to parse', async () => {
