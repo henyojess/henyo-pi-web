@@ -19,7 +19,6 @@ export async function fetchWithRetry(
       const res = await fetch(targetUrl, {
         signal: controller.signal,
         headers: {
-          ...customHeaders,
           'User-Agent': pickRandom(USER_AGENTS),
           'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8',
           'Accept-Language': pickRandom(ACCEPT_LANGUAGES),
@@ -29,6 +28,8 @@ export async function fetchWithRetry(
           'Sec-Fetch-Site': 'none',
           'Sec-Fetch-User': '?1',
           'Upgrade-Insecure-Requests': '1',
+          // Caller-supplied headers are spread last so they override the defaults above.
+          ...customHeaders,
         },
         redirect: 'follow',
       });

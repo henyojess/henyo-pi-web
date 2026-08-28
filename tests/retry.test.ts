@@ -1,4 +1,5 @@
 import { fetchWithRetry } from '../shared/fetch/retry';
+import { USER_AGENTS } from '../shared/user-agents';
 
 // Mock delay to be instant
 vi.mock('../shared/user-agents', async (importOriginal) => {
@@ -156,5 +157,32 @@ describe('fetchWithRetry', () => {
       throw err;
     });
     await expect(fetchWithRetry('https://example.com', 5000)).rejects.toThrow('Error');
+  });
+
+  it('honors caller-supplied User-Agent over the default', async () => {
+    let captured: Record<string, string> | undefined;
+    vi.spyOn(global, 'fetch').mockImplementation(async (_url, init) => {
+      captured = init?.headers as Record<string, string> | undefined;
+      return new Response('<html><body>OK</body></html>', {
+        status: 200,
+        headers: { 'Content-Type': 'text/html' },
+      });
+    });
+    await fetchWithRetry('https://example.com', 10000, { 'User-Agent': 'test-ua/1.0' });
+    expect(captured?.['User-Agent']).toBe('test-ua/1.0');
+  });
+
+  it('sets a default User-Agent from USER_AGENTS when no custom headers given', async () => {
+    let captured: Record<string, string> | undefined;
+    vi.spyOn(global, 'fetch').mockImplementation(async (_url, init) => {
+      captured = init?.headers as Record<string, string> | undefined;
+      return new Response('<html><body>OK</body></html>', {
+        status: 200,
+        headers: { 'Content-Type': 'text/html' },
+      });
+    });
+    await fetchWithRetry('https://example.com', 10000);
+    expect(captured?.['User-Agent']).toBeDefined();
+    expect(USER_AGENTS).toContain(captured?.['User-Agent']);
   });
 });
