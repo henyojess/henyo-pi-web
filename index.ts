@@ -246,10 +246,10 @@ export default function (pi: ExtensionAPI) {
     name: "search_github",
     label: "Search GitHub",
     description:
-      "Repository and source code search via GitHub. Use for: repo names, library names, code patterns, issues, " +
-      "docs. Query: short names (repo, library, pattern), not full sentences. Don't use for: package docs (→ search_npm).",
+      "Repository and issue search via GitHub. Use for: repo names, library names, issues (open or closed). " +
+      "Query: short names, not full sentences. Don't use for: package docs (→ search_npm); Q&A (→ search_stackoverflow).",
     parameters: Type.Object({
-      query: Type.String({ description: "Repository name, library name, or code pattern — short names, not full sentences" }),
+      query: Type.String({ description: "Repository name, library name, or issue keywords — short, focused terms" }),
       max: Type.Optional(Type.Integer({
         default: 10, minimum: 1, maximum: 50,
         description: "Max results to return",

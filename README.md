@@ -66,7 +66,7 @@ JavaScript package registry search. Use for package names, JS library functional
 
 ### `search_github`
 
-Repository and source code search via GitHub. Use for repo names, library names, code patterns, issues, docs — short names, not full sentences. Don't use for package docs (→ `search_npm`).
+Repository and issue search via GitHub. Use for repo names, library names, and issues (open or closed) — short names, not full sentences. Don't use for package docs (→ `search_npm`).
 
 **Parameters:**
 

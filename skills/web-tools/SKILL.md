@@ -25,7 +25,7 @@ session.
 | `search_wikipedia` | Encyclopedia: definitions, concepts, history, factual background | Short topic names, not full questions | Code errors (→ `search_stackoverflow`); recent news (→ `search_ddg`); package docs (→ `search_npm`); Q&A (→ `search_stackoverflow`) |
 | `search_stackoverflow` | Programming Q&A: error messages, debugging, syntax, API usage | Title keywords only — AND semantics, every word must appear in the question title; error text only when copied verbatim into the title (common runtime errors). Vote ranking/answer bodies → `henyo_fetch` SE API (see fallback chains) | General CS concepts (→ `search_wikipedia`); package docs (→ `search_npm`); repo searches (→ `search_github`); non-programming topics (→ `search_ddg`) |
 | `search_npm` | npm registry: package names, JS library lookups, dependency discovery | Package name or functionality — short and specific | General JS questions (→ `search_stackoverflow`); GitHub repos (→ `search_github`); non-JS packages (pip, crates) (→ `search_ddg`) |
-| `search_github` | GitHub: repos, source code, issues | Repo/library names and code patterns — short names, not sentences | Package docs (→ `search_npm`); Q&A (→ `search_stackoverflow`); general web search (→ `search_ddg`) |
+| `search_github` | GitHub: repositories and issues (not source code) | Repo/library names and issue keywords — short names, not sentences | Package docs (→ `search_npm`); Q&A (→ `search_stackoverflow`); general web search (→ `search_ddg`) |
 | `henyo_fetch` | Fetch and extract one known URL into clean readable text | Exact URL; `timeout` for slow pages; `headers` for auth | Discovering URLs (search first) |
 
 ## Query shaping: good vs. bad
@@ -60,7 +60,7 @@ title constraint), not just shortening or rephrasing. After 2 failed retries
 
 - Weak `search_ddg` results → `henyo_fetch` a promising URL from them
 - `search_wikipedia` 0 hits on a question → rephrase as a short topic name, or use `search_ddg`
-- `search_npm` 0 hits → `search_github` (repo names), then `search_ddg`
+- `search_npm` 0 hits → `search_github` (repo names, issue keywords), then `search_ddg`
 - Rate-limited provider (cooling down) → switch to another search tool, as the message advises
 - `search_stackoverflow` 0 hits (no title match) → `search_ddg` with `site:stackoverflow.com <query>` (model-driven — the SE API only AND-matches question titles)
 - `henyo_fetch` 401/403/503 (e.g. Cloudflare blocks) → now auto-recovers via the Wayback Machine when eligible (result tagged `source: 'wayback'` + `snapshotDate` + `originalUrl`); disable with `waybackEnabled: false`

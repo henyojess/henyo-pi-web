@@ -39,24 +39,67 @@ vi.mock('../../shared/rate-limit', () => {
 });
 import { GITHUB_RESPONSE } from './shared.test.ts';
 
+// search/issues endpoint shape — one open issue (PR items are filtered by the provider).
+// Note: real API items carry no top-level owner/name — the repo must be derived
+// from html_url, which is what this fixture exercises.
+const GITHUB_ISSUE_RESPONSE = JSON.stringify({
+  items: [
+    {
+      number: 7,
+      title: 'React CSS cascade bug',
+      state: 'open',
+      body: 'Styles load in the wrong order with dynamic imports.',
+      html_url: 'https://github.com/facebook/react/issues/7',
+      comments: 4,
+      reactions: { total_count: 12 },
+    },
+  ],
+});
+
+// URL-aware GitHub Search API mock: repositories → repos, issues → issues
+function mockGitHubFetch(repoBody: string, issueBody: string) {
+  return vi.spyOn(global, 'fetch').mockImplementation(async (url: string) => {
+    const body = url.includes('/search/issues') ? issueBody : repoBody;
+    return new Response(body, {
+      status: 200,
+      headers: { 'Content-Type': 'application/json' },
+    });
+  });
+}
+
 describe('searchGitHub', () => {
   afterEach(() => {
     vi.restoreAllMocks();
   });
 
   it('returns results for query', async () => {
-    vi.spyOn(global, 'fetch').mockImplementation(async () => {
-      return new Response(GITHUB_RESPONSE, {
-        status: 200,
-        headers: { 'Content-Type': 'application/json' },
-      });
-    });
+    mockGitHubFetch(GITHUB_RESPONSE, JSON.stringify({ items: [] }));
     const results = await searchGitHub('test');
     expect(results.length).toBe(2);
     expect(results[0].title).toBe('facebook/react (JavaScript)');
     expect(results[0].url).toBe('https://github.com/facebook/react');
     expect(results[0].snippet).toBe('A JavaScript library for building user interfaces');
     expect(results[0].source).toBe('github');
+  });
+
+  it('merges issue results after repository results', async () => {
+    mockGitHubFetch(GITHUB_RESPONSE, GITHUB_ISSUE_RESPONSE);
+    const results = await searchGitHub('css cascade');
+    expect(results.length).toBe(3); // 2 repos + 1 issue
+    expect(results[2].title).toBe('facebook/react#7 [open] — React CSS cascade bug');
+    expect(results[2].url).toBe('https://github.com/facebook/react/issues/7');
+    expect(results[2].snippet).toContain('4 comments, 12 👍');
+    expect(results[2].source).toBe('github');
+  });
+
+  it('returns repo results when the issues endpoint fails', async () => {
+    vi.spyOn(global, 'fetch').mockImplementation(async (url: string) => {
+      if (url.includes('/search/issues')) return new Response('Not Found', { status: 404 });
+      return new Response(GITHUB_RESPONSE, { status: 200, headers: { 'Content-Type': 'application/json' } });
+    });
+    const results = await searchGitHub('test');
+    expect(results.length).toBe(2);
+    expect(results[0].title).toBe('facebook/react (JavaScript)');
   });
 
   it('throws on HTTP error', async () => {

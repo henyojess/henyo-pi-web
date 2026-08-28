@@ -68,8 +68,35 @@ describe('search providers are callable', () => {
   const mockNpmResponse = JSON.stringify({
     objects: [{ package: { name: 'test-pkg', version: '1.0.0', description: 'A test package' } }],
   });
-  const mockGitHubResponse = JSON.stringify({
+  const mockGitHubRepoResponse = JSON.stringify({
     items: [{ owner: { login: 'test' }, name: 'test-repo', html_url: 'https://github.com/test/test-repo', description: 'Test', language: 'TS' }],
+  });
+  const mockGitHubIssueResponse = JSON.stringify({
+    items: [
+      {
+        number: 42,
+        title: 'CSS cascade bug',
+        state: 'open',
+        body: 'The cascade order differs between dev and prod.',
+        html_url: 'https://github.com/test/test-repo/issues/42',
+        owner: { login: 'test' },
+        name: 'test-repo',
+        comments: 3,
+        reactions: { total_count: 5 },
+      },
+      {
+        number: 43,
+        title: 'PR: fix cascade',
+        state: 'open',
+        body: 'Fixes #42',
+        html_url: 'https://github.com/test/test-repo/pull/43',
+        owner: { login: 'test' },
+        name: 'test-repo',
+        comments: 1,
+        reactions: { total_count: 0 },
+        pull_request: { url: 'https://api.github.com/repos/test/test-repo/pulls/43' },
+      },
+    ],
   });
   const mockWikiResponse = JSON.stringify([
     null, ['Test Topic'], ['A test topic'], ['https://en.wikipedia.org/wiki/Test_Topic'],
@@ -107,13 +134,47 @@ describe('search providers are callable', () => {
     expect(results[0].source).toBe('npm');
   });
 
-  it('searchGitHub returns repo results', async () => {
-    vi.spyOn(global, 'fetch').mockResolvedValue(new Response(mockGitHubResponse, { status: 200 }));
+  it('searchGitHub returns repo and issue results', async () => {
+    vi.spyOn(global, 'fetch').mockImplementation(async (url: string) => {
+      if (url.includes('/search/issues')) return new Response(mockGitHubIssueResponse, { status: 200 });
+      return new Response(mockGitHubRepoResponse, { status: 200 });
+    });
 
     const results = await searchGitHub('test');
-    expect(results.length).toBeGreaterThan(0);
-    expect(results[0].title).toContain('test/test-repo');
+    expect(results.length).toBe(2); // 1 repo + 1 issue (PR item filtered out)
+    expect(results[0].title).toBe('test/test-repo (TS)');
+    expect(results[1].title).toBe('test/test-repo#42 [open] — CSS cascade bug');
+    expect(results[1].snippet).toContain('3 comments, 5 👍');
     expect(results[0].source).toBe('github');
+    expect(results[1].source).toBe('github');
+  });
+
+  it('searchGitHub filters pull requests out of issue results', async () => {
+    vi.spyOn(global, 'fetch').mockImplementation(async (url: string) => {
+      if (url.includes('/search/issues')) return new Response(mockGitHubIssueResponse, { status: 200 });
+      return new Response(JSON.stringify({ items: [] }), { status: 200 });
+    });
+
+    const results = await searchGitHub('test');
+    expect(results.length).toBe(1);
+    expect(results[0].title).not.toContain('#43');
+  });
+
+  it('searchGitHub returns repo results when the issues endpoint fails', async () => {
+    vi.spyOn(global, 'fetch').mockImplementation(async (url: string) => {
+      if (url.includes('/search/issues')) return new Response('Not Found', { status: 404 });
+      return new Response(mockGitHubRepoResponse, { status: 200 });
+    });
+
+    const results = await searchGitHub('test');
+    expect(results.length).toBe(1);
+    expect(results[0].title).toContain('test/test-repo');
+  });
+
+  it('searchGitHub throws when both endpoints fail', async () => {
+    vi.spyOn(global, 'fetch').mockResolvedValue(new Response('Server Error', { status: 500 }));
+
+    await expect(searchGitHub('test')).rejects.toThrow('GitHub API HTTP 500');
   });
 
   it('searchWikipedia returns wiki results', async () => {
