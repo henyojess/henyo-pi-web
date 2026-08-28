@@ -382,6 +382,7 @@ export default function (pi: ExtensionAPI) {
           message.includes('invalid URL') ? 'invalid-url' :
           message.includes('timeout') ? 'timeout' :
           message.includes('404') ? 'not-found' :
+          message.includes('HTTP 400') ? 'bad-request' :
           message.includes('403') || message.includes('forbidden') ? 'forbidden' :
           message.includes('500') || message.includes('502') || message.includes('503') ? 'server-error' :
           message.includes('fetch failed') || message.includes('network') || message.includes('failed after') ? 'network' :

@@ -202,4 +202,22 @@ describe.skipIf(!piDir)('henyo_fetch trace logging (jiti-loaded extension)', () 
     expect(content).toContain('status="error"');
     expect(content).toContain('error="network"');
   }, 30_000);
+
+  it('fetch gets HTTP 400 → status="error" error="bad-request"', async () => {
+    const url = `https://example.com/fetch-trace-400-${RUN}`;
+    vi.spyOn(global, 'fetch').mockImplementation(async () =>
+      new Response('{"error_message":"site is required"}', { status: 400, statusText: 'Bad Request' }),
+    );
+    (globalThis as Record<string, unknown>).__henyoTraceConfig = true;
+
+    const result = await henyoFetchTool.execute(
+      'tc-400', { url, timeout: 1000 }, new AbortController().signal, undefined, {},
+    );
+    expect(result.details.errorCategory).toBe('bad-request');
+
+    const content = readLog();
+    expect(content).toContain(`henyo-fetch query="${url}"`);
+    expect(content).toContain('status="error"');
+    expect(content).toContain('error="bad-request"');
+  }, 30_000);
 });

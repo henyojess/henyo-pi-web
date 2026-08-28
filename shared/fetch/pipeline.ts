@@ -56,7 +56,7 @@ export interface FetchPageOptions {
 }
 
 /** Error category for fetch failures — used for UX display and actionable guidance. */
-export type FetchErrorCategory = 'ssrf' | 'invalid-url' | 'network' | 'timeout' | 'size-exceeded' | 'extraction-failed' | 'cloudflare' | 'not-found' | 'forbidden' | 'server-error' | 'unknown';
+export type FetchErrorCategory = 'ssrf' | 'invalid-url' | 'network' | 'timeout' | 'size-exceeded' | 'extraction-failed' | 'cloudflare' | 'not-found' | 'forbidden' | 'bad-request' | 'server-error' | 'unknown';
 
 export interface FetchResult {
   text: string;

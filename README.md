@@ -94,7 +94,7 @@ Extract clean readable content from any URL. Uses Defuddle-first extraction with
 - Politeness delay between requests (configurable min/max)
 - Retry with exponential backoff
 - `cached` flag on cached results
-- Error categories in `details` (`errorCategory`: ssrf, invalid-url, timeout, not-found, forbidden, server-error, network, unknown)
+- Error categories in `details` (`errorCategory`: ssrf, invalid-url, timeout, not-found, forbidden, bad-request, server-error, network, unknown)
 
 **TUI Features:**
 
