@@ -60,14 +60,10 @@ export default function (pi: ExtensionAPI) {
     name: "search_ddg",
     label: "Search DuckDuckGo",
     description:
-      "General web search via DuckDuckGo. Use for: news, articles, broad topics, general queries. " +
-      "Don't use for: encyclopedia definitions (→ search_wikipedia), programming errors (→ search_stackoverflow), " +
-      "package lookups (→ search_npm), or repo/source searches (→ search_github). " +
-      "Domain: duckduckgo.com, general web results.",
-    promptSnippet:
-      "General web search. Use for news, articles, broad topics. Fallback when no specialized tool fits.",
+      "General web search via DuckDuckGo. Use for: news, articles, broad topics, general queries. Fallback when " +
+      "no specialized tool fits. Don't use for: specific programming errors (→ search_stackoverflow).",
     parameters: Type.Object({
-      query: Type.String({ description: "Search query — any topic, question, or phrase" }),
+      query: Type.String({ description: "Focused topic, question, or phrase — keep it short; long multi-clause queries return weaker results" }),
       max: Type.Optional(Type.Integer({
         default: 10, minimum: 1, maximum: 50,
         description: "Max results to return",
@@ -105,14 +101,10 @@ export default function (pi: ExtensionAPI) {
     name: "search_wikipedia",
     label: "Search Wikipedia",
     description:
-      "Encyclopedia knowledge via Wikipedia. Use for: definitions, concepts, history, factual background, short topic names. " +
-      "Don't use for: full questions, code errors (→ search_stackoverflow), recent news (→ search_ddg), " +
-      "package docs (→ search_npm), or Q&A (→ search_stackoverflow). " +
-      "Domain: wikipedia.org. Use short topic names like 'React (software)' or 'Kubernetes'.",
-    promptSnippet:
-      "Search Wikipedia for definitions, concepts, history. Use short topic names, not full questions.",
+      "Encyclopedia knowledge via Wikipedia. Use for: definitions, concepts, history. Query: short topic names " +
+      "like 'React (software)' or 'Kubernetes', not full questions. Don't use for: code errors (→ search_stackoverflow).",
     parameters: Type.Object({
-      query: Type.String({ description: "Short topic name (e.g. 'React (software)', 'Kubernetes', 'Machine Learning')" }),
+      query: Type.String({ description: "Short topic name (e.g. 'React (software)', 'Kubernetes') — not full questions" }),
       max: Type.Optional(Type.Integer({
         default: 10, minimum: 1, maximum: 50,
         description: "Max results to return",
@@ -151,14 +143,10 @@ export default function (pi: ExtensionAPI) {
     name: "search_stackoverflow",
     label: "Search Stack Overflow",
     description:
-      "Programming Q&A via Stack Overflow. Use for: error messages, code patterns, specific programming problems, debugging, syntax, API usage. " +
-      "Don't use for: general CS concepts (→ search_wikipedia), package docs (→ search_npm), " +
-      "repo searches (→ search_github), or non-programming topics (→ search_ddg). " +
-      "Domain: stackoverflow.com. Include error messages and code patterns in the query.",
-    promptSnippet:
-      "Search Stack Overflow for programming Q&A. Include error messages and code patterns.",
+      "Programming Q&A via Stack Overflow. Use for: error messages, code patterns, debugging, syntax, API usage. " +
+      "Include the full error message and code pattern. Don't use for: package lookups (→ search_npm).",
     parameters: Type.Object({
-      query: Type.String({ description: "Error message, code pattern, or specific programming problem" }),
+      query: Type.String({ description: "Full error message and code pattern — the specific problem, not a general question" }),
       max: Type.Optional(Type.Integer({
         default: 10, minimum: 1, maximum: 50,
         description: "Max results to return",
@@ -196,14 +184,10 @@ export default function (pi: ExtensionAPI) {
     name: "search_npm",
     label: "Search npm",
     description:
-      "JavaScript package registry search. Use for: npm package names, JS library functionality descriptions, dependency lookups. " +
-      "Don't use for: general JS questions (→ search_stackoverflow), GitHub repos (→ search_github), " +
-      "or non-JS packages (pip, crates, pypi → search_ddg). " +
-      "Domain: npmjs.com, node_modules. Use package names or functionality descriptions.",
-    promptSnippet:
-      "Search npm registry for JavaScript packages. Use package names or functionality descriptions.",
+      "JavaScript package registry search via npm. Use for: package names, JS library functionality, " +
+      "dependency lookups. Don't use for: non-JS packages (pip, crates) (→ search_ddg)."
     parameters: Type.Object({
-      query: Type.String({ description: "JavaScript package name or functionality description" }),
+      query: Type.String({ description: "Package name or functionality description — short and specific (e.g. 'react', 'state machine')" }),
       max: Type.Optional(Type.Integer({
         default: 10, minimum: 1, maximum: 50,
         description: "Max results to return",
@@ -241,13 +225,10 @@ export default function (pi: ExtensionAPI) {
     name: "search_github",
     label: "Search GitHub",
     description:
-      "Repository and source code search via GitHub. Use for: repo names, library names, code patterns, source code, issues, documentation. " +
-      "Don't use for: package docs (→ search_npm), Q&A (→ search_stackoverflow), or general web search (→ search_ddg). " +
-      "Domain: github.com, git repositories. Use repo names, library names, or code patterns.",
-    promptSnippet:
-      "Search GitHub for repos, source code, issues. Use repo names, library names, or code patterns.",
+      "Repository and source code search via GitHub. Use for: repo names, library names, code patterns, issues, " +
+      "docs. Query: short names (repo, library, pattern), not full sentences. Don't use for: package docs (→ search_npm)."
     parameters: Type.Object({
-      query: Type.String({ description: "Repository name, library name, or code pattern" }),
+      query: Type.String({ description: "Repository name, library name, or code pattern — short names, not full sentences" }),
       max: Type.Optional(Type.Integer({
         default: 10, minimum: 1, maximum: 50,
         description: "Max results to return",
@@ -287,8 +268,6 @@ export default function (pi: ExtensionAPI) {
     description:
       "Extract clean readable content from any URL. Uses Defuddle locally with Jina Reader fallback. " +
       "Handles Cloudflare protection, SPAs, GitHub raw files. Cached 1 hour.",
-    promptSnippet:
-      "Extract clean content from a URL. Defuddle + Jina fallback. Handles protected/JS-heavy pages. Caching enabled.",
     parameters: Type.Object({
       url: Type.String({ description: "URL to fetch" }),
       timeout: Type.Optional(Type.Integer({
