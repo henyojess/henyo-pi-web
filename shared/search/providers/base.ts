@@ -69,6 +69,10 @@ export interface SearchResult {
   snippet: string;
   domain?: string;
   source?: string;
+  /** Vote score (popularity signal) — populated only by providers that expose it */
+  score?: number;
+  /** View count — populated only by providers that expose it */
+  viewCount?: number;
 }
 
 // ─── Provider Function Types ─────────────────────────────────────────────────

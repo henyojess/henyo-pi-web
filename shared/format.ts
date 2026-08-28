@@ -242,6 +242,12 @@ export function formatResults(results: SearchResult[]): string {
     line += `\n   URL: ${r.url}`;
     if (r.snippet) line += `\n   ${r.snippet.substring(0, 200)}`;
     if (r.domain) line += `\n   Domain: ${r.domain}`;
+    if (r.score !== undefined || r.viewCount !== undefined) {
+      let stats = '';
+      if (r.score !== undefined) stats += `Score: +${r.score}`;
+      if (r.viewCount !== undefined) stats += `${stats ? ' · ' : ''}${r.viewCount} views`;
+      line += `\n   ${stats}`;
+    }
     return line;
   }).join('\n\n');
 }

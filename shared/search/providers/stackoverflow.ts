@@ -57,6 +57,8 @@ export async function searchStackOverflowAPI(query: string, config?: ProviderCon
       snippet: body.substring(0, 300),
       source: 'stackoverflow',
       domain: 'stackoverflow.com',
+      score: typeof item.score === 'number' ? item.score : undefined,
+      viewCount: typeof item.view_count === 'number' ? item.view_count : undefined,
     };
   });
 }

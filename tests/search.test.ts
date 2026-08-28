@@ -1,5 +1,6 @@
 import { detectContext, CODING_SIGNALS } from '../shared/search/context';
 import { normalizeUrl, formatResults, diversifyByDomain, bm25Score, rankResults } from '../shared/format';
+import { searchStackOverflowAPI } from '../shared/search/providers/stackoverflow';
 import type { SearchResult } from '../shared/search/providers';
 
 // ─── detectContext ───────────────────────────────────────────────────────────
@@ -158,6 +159,51 @@ describe('formatResults', () => {
     const output = formatResults(results);
     expect(output).toContain('1. First');
     expect(output).toContain('2. Second');
+  });
+
+  it('renders score and viewCount when present', () => {
+    const results: SearchResult[] = [
+      { title: 'Test', url: 'https://example.com', snippet: '', score: 203, viewCount: 139088 },
+    ];
+    const output = formatResults(results);
+    expect(output).toContain('+203');
+    expect(output).toContain('139088 views');
+  });
+
+  it('omits the score line when score/viewCount are not set', () => {
+    const results: SearchResult[] = [
+      { title: 'Test Title', url: 'https://example.com', snippet: 'A snippet' },
+    ];
+    const output = formatResults(results);
+    expect(output).not.toContain('Score:');
+  });
+});
+
+// ─── searchStackOverflowAPI ─────────────────────────────────────────────────
+
+describe('searchStackOverflowAPI', () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it('maps score and view_count from the SE API payload', async () => {
+    vi.spyOn(global, 'fetch').mockImplementation(async () => {
+      return new Response(JSON.stringify({
+        items: [{
+          score: 203,
+          view_count: 139088,
+          title: 'T',
+          link: 'https://stackoverflow.com/questions/1',
+          body: 'B',
+        }],
+      }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      });
+    });
+    const results = await searchStackOverflowAPI('debounce function');
+    expect(results[0].score).toBe(203);
+    expect(results[0].viewCount).toBe(139088);
   });
 });
 
