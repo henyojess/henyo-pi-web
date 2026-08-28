@@ -178,12 +178,32 @@ Optional settings go in `~/.pi/agent/settings.json` (shared with the rest of pi'
 
 | Option | Type | Default | Description |
 |--------|------|---------|-------------|
-| `trace` | boolean \| string[] | none | Pipeline debug tracing: `true` traces all providers, a list of provider names traces only those. Logs to `/tmp/henyo-trace.log` with rotation. |
+| `trace` | boolean \| string[] | none | Trace logging for search **and fetch**: `true` traces everything, a list of names (`duckduckgo`, `github`, `stackoverflow`, `npm`, `wikipedia`, `search_ddg`, …, `henyo-fetch`) traces only those. Logs to `/tmp/henyo-trace.log` with rotation (10 MB, 3 backups). |
 | `providers.<name>.api-key` | string | none | Per-provider API key — currently `stackoverflow` only. An SO StackExchange key raises the SO API quota from the shared anonymous limit to the per-user quota. |
 
 Per-provider blocks live under `providers`, keyed by provider name (`stackoverflow`, `duckduckgo`, `wikipedia`, `npm`, `github`) — provider names are reserved.
 
 **Tool contract:** each search tool returns only its own provider's results. A provider failure surfaces as `Provider error (…)` or `Search cooling down …`, never as another provider's results; a genuine no-matches query returns 0 results. Rate-limit cooldowns (built-in per-provider defaults) are enforced and reported, not swallowed.
+
+### Trace logging
+
+When `henyo-search.trace` is enabled, **every outcome of the whole search and fetch process** is appended to `/tmp/henyo-trace.log` — so "what happened to my search/fetch?" is answerable from one log:
+
+- **Search, tool layer** (`search_ddg`, `search_wikipedia`, `search_stackoverflow`, `search_npm`, `search_github`): cache hits, cooldown blocks, provider errors, aborts, no-results, successes.
+- **Search, provider layer** (`duckduckgo`, `github`, `stackoverflow`, `npm`, `wikipedia`): successes and failures — including the rate-limit events that **set a cooldown** (e.g. `error="http-429"`, `error="captcha"`, `error="so-api-rate-limited"`), logged at the moment the cooldown is written.
+- **Fetch** (`henyo-fetch`): successes, cache hits, oversized/size-exceeded, and errors with the `errorCategory` (`ssrf`, `network`, `timeout`, …).
+
+Example lines:
+
+```
+[2026-08-28T10:15:03.221Z] search_ddg query="react state management" duration=1204ms results=0 status="cooling-down" error="duckduckgo"
+[2026-08-28T10:15:03.180Z] duckduckgo query="react state management" duration=1198ms results=0 status="error" error="http-429"
+[2026-08-28T10:16:11.902Z] henyo-fetch query="https://example.com/docs" duration=2310ms results=48211 status="ok"
+```
+
+Line format: `[timestamp] <provider|tool> query="…" duration=<ms> results=<n> status="…" [error="…"] [instance="…"]`. For `henyo-fetch`, `results=` is the content size in bytes, not a result count.
+
+`status` values: `ok`, `cache-hit`, `cooling-down`, `no-results`, `oversized`, `size-exceeded`, `aborted`, `error`. `error=` carries the rate-limit event tag on cooldown-setting events (`http-429`, `http-403`, `captcha`, `so-api-rate-limited`, `so-api-http-<status>`, `scraper-unavailable`), the fetch `errorCategory` on fetch failures, the blocking provider key on cooldown blocks, and provider error messages otherwise (e.g. `No endpoint succeeded`).
 
 ## Requirements
 

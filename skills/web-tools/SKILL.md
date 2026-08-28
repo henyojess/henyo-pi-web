@@ -69,6 +69,11 @@ unavailable.
 - Oversized fetches return a JSON envelope with `cacheFilePath` and a read
   strategy: prefer grep or read with offset/limit to extract specific sections;
   don't read the whole file
+- When `henyo-search.trace` is set in settings, **every** search/fetch outcome is
+  logged to `/tmp/henyo-trace.log` (tool + provider layers: cache hits,
+  cooldown blocks with `error="http-429"`/`error="captcha"` etc., no-results,
+  errors, successes; fetch: ok/cache/oversized/size-exceeded/error) — check it
+  first when a search or fetch behaves unexpectedly
 
 Multi-step deep research (planning, cross-validation, reporting) →
 `/skill:deep-research`.
