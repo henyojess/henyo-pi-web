@@ -2,14 +2,12 @@ import { pickRandom, USER_AGENTS, ACCEPT_LANGUAGES } from '../../user-agents';
 import { enqueue } from '../queue';
 import { rateLimitStore, DEFAULT_RATE_LIMIT_COOLDOWNS } from '../../rate-limit';
 import { SearchResult, isCaptchaResponse, withRetry, extractDomain } from './base';
-import { shouldTrace, traceLog } from '../trace';
+import { traceEnd } from '../trace';
 
 // ─── DuckDuckGo Provider ─────────────────────────────────────────────────────
 
 export async function searchDuckDuckGo(query: string, signal?: AbortSignal): Promise<SearchResult[]> {
   const startTime = Date.now();
-  const traceConfig = (globalThis as any).__henyoTraceConfig;
-  const traceEnabled = shouldTrace(traceConfig, 'duckduckgo');
 
   return enqueue('duckduckgo', async () => {
     const endpoints = [
@@ -57,6 +55,15 @@ export async function searchDuckDuckGo(query: string, signal?: AbortSignal): Pro
         throw new Error('No endpoint succeeded');
       }, 'duckduckgo');
     } catch (err) {
+      // Trace the failure outcome (cooldown-setting events: 429/CAPTCHA, plus
+      // exhausted retries) before re-throwing.
+      if (signal?.aborted) {
+        traceEnd('duckduckgo', query, startTime, { status: 'aborted', resultCount: 0 });
+      } else {
+        const message = err instanceof Error ? err.message : String(err);
+        const error = message === 'RATE_LIMITED' ? 'http-429' : message === 'CAPTCHA' ? 'captcha' : message;
+        traceEnd('duckduckgo', query, startTime, { status: 'error', resultCount: 0, error });
+      }
       // Re-throw instead of a silent []: RATE_LIMITED / CAPTCHA (cooldown
       // already set above) and 'No endpoint succeeded' (withRetry exhausted)
       // surface as provider errors in execute.ts.
@@ -126,9 +133,7 @@ export async function searchDuckDuckGo(query: string, signal?: AbortSignal): Pro
       }
     }
 
-    if (traceEnabled) {
-      traceLog({ provider: 'duckduckgo', query, durationMs: Date.now() - startTime, resultCount: results.length });
-    }
+    traceEnd('duckduckgo', query, startTime, { status: 'ok', resultCount: results.length });
     return results;
   });
 }

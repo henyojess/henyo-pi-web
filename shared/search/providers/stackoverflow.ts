@@ -2,6 +2,7 @@ import { pickRandom, USER_AGENTS } from '../../user-agents';
 import { enqueue } from '../queue';
 import { rateLimitStore, DEFAULT_RATE_LIMIT_COOLDOWNS } from '../../rate-limit';
 import { SearchResult, ProviderConfig } from './base';
+import { traceEnd } from '../trace';
 
 // ─── StackOverflow API Error ─────────────────────────────────────────────────
 
@@ -213,15 +214,53 @@ function parseHtmlResults(html: string): SearchResult[] {
 // ─── StackOverflow Provider ──────────────────────────────────────────────────
 
 export async function searchStackOverflow(query: string, signal?: AbortSignal, config?: ProviderConfig): Promise<SearchResult[]> {
+  const startTime = Date.now();
   return enqueue('stackoverflow', async () => {
     try {
-      return await searchStackOverflowAPI(query, config, signal);
+      const apiResults = await searchStackOverflowAPI(query, config, signal);
+      traceEnd('stackoverflow', query, startTime, { status: 'ok', resultCount: apiResults.length });
+      return apiResults;
     } catch (err) {
+      // Trace the API-failure event (tags the cooldown-setting event).
+      if (signal?.aborted) {
+        traceEnd('stackoverflow', query, startTime, { status: 'aborted', resultCount: 0 });
+      } else {
+        let error: string;
+        if (err instanceof StackOverflowAPIError) {
+          // Only quota_remaining === 0 is thrown as StackOverflowAPIError
+          error = 'so-api-rate-limited';
+        } else if (err instanceof Error) {
+          const httpMatch = /StackOverflow API HTTP (\d+)/.exec(err.message);
+          error = httpMatch ? 'so-api-http-' + httpMatch[1] : err.message;
+        } else {
+          error = String(err);
+        }
+        traceEnd('stackoverflow', query, startTime, { status: 'error', resultCount: 0, error });
+      }
       if (err instanceof StackOverflowAPIError) {
         rateLimitStore.setCooldown('stackoverflow', DEFAULT_RATE_LIMIT_COOLDOWNS.stackoverflow);
       }
     }
 
-    return searchStackOverflowScraper(query, signal);
+    // Fallback: scraper (Jina → plain fetch). Up to a 2nd provider-layer entry
+    // per call — the API event above and this final outcome are distinct events.
+    let results: SearchResult[];
+    try {
+      results = await searchStackOverflowScraper(query, signal);
+    } catch (err) {
+      if (signal?.aborted) {
+        traceEnd('stackoverflow', query, startTime, { status: 'aborted', resultCount: 0 });
+      } else {
+        const message = err instanceof Error ? err.message : String(err);
+        traceEnd('stackoverflow', query, startTime, {
+          status: 'error',
+          resultCount: 0,
+          error: message === 'StackOverflow scraper unavailable' ? 'scraper-unavailable' : message,
+        });
+      }
+      throw err;
+    }
+    traceEnd('stackoverflow', query, startTime, { status: 'ok', resultCount: results.length });
+    return results;
   });
 }

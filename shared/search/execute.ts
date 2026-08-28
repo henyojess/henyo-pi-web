@@ -2,6 +2,7 @@ import { createCache } from '../cache';
 import { rateLimitStore } from '../rate-limit';
 import { SearchResult, sanitizeQuery, ProviderConfig } from './providers/base';
 import { formatResults, rankResults, diversifyByDomain } from '../format';
+import { traceEnd } from './trace';
 
 // toolName → rate-limit provider key (maps to DEFAULT_RATE_LIMIT_COOLDOWNS keys)
 const TOOL_PROVIDER_KEYS: Record<string, string> = {
@@ -27,6 +28,7 @@ export function createSearchExecute(
   return async (_toolCallId: string, params: { query: string; max?: number; noCache?: boolean }, signal: AbortSignal | undefined, _onUpdate: any, _ctx: any) => {
     // Wire trace config for providers that check globalThis.__henyoTraceConfig
     (globalThis as any).__henyoTraceConfig = providerConfig?.trace ?? false;
+    const startTime = Date.now();
     const { query, max = 10, noCache = false } = params;
 
     const cache = createCache<SearchResult[]>(
@@ -38,6 +40,7 @@ export function createSearchExecute(
     if (!noCache) {
       const cached = cache.get(cacheKey);
       if (cached && cached.length > 0) {
+        traceEnd(toolName, query, startTime, { status: 'cache-hit', resultCount: cached.length });
         return {
           content: [{ type: "text", text: `[cache hit — ${cached.length} results]\n\n${formatResults(cached)}` }],
           details: { cached: true, count: cached.length, providers: [{ name: toolName, status: 'ok' as const }] },
@@ -53,6 +56,7 @@ export function createSearchExecute(
     if (providerKey) {
       const remaining = rateLimitStore.remainingMs(providerKey);
       if (remaining > 0) {
+        traceEnd(toolName, query, startTime, { status: 'cooling-down', resultCount: 0, error: providerKey });
         return {
           content: [{ type: "text", text: `Search cooling down for ${Math.ceil(remaining / 1000)}s — try again shortly or use a different search tool.` }],
           details: { count: 0, coolingDown: true, remainingMs: remaining },
@@ -69,12 +73,14 @@ export function createSearchExecute(
       providerResults.push({ name: toolName, status: 'error' });
       if (signal?.aborted) {
         // Abort fired mid-flight (fetch rejects with AbortError) — not a provider failure
+        traceEnd(toolName, query, startTime, { status: 'aborted', resultCount: 0 });
         return {
           content: [{ type: "text", text: "Search cancelled" }],
           details: { count: 0, aborted: true, providers: providerResults },
         };
       }
       // Surface the provider failure visibly — never a silent "No results found."
+      traceEnd(toolName, query, startTime, { status: 'error', resultCount: 0, error: err?.message ?? String(err) });
       return {
         content: [{ type: "text", text: `Provider error (${toolName}): ${err?.message ?? err} — no results returned. Try again later or use a different search tool.` }],
         details: { count: 0, providers: providerResults },
@@ -87,6 +93,7 @@ export function createSearchExecute(
 
     // Check for abort — return partial results if signal was triggered
     if (signal?.aborted) {
+      traceEnd(toolName, query, startTime, { status: 'aborted', resultCount: Math.min(diversified.length, max) });
       return {
         content: [{ type: "text", text: diversified.length > 0 ? formatResults(diversified.slice(0, max)) : "Search cancelled" }],
         details: { count: diversified.length, aborted: true, providers: providerResults },
@@ -98,6 +105,7 @@ export function createSearchExecute(
     }
 
     if (diversified.length === 0) {
+      traceEnd(toolName, query, startTime, { status: 'no-results', resultCount: 0 });
       return {
         content: [{ type: "text", text: "No results found." }],
         details: { count: 0, providers: providerResults },
@@ -105,6 +113,7 @@ export function createSearchExecute(
     }
 
     const sliced = diversified.slice(0, max);
+    traceEnd(toolName, query, startTime, { status: 'ok', resultCount: sliced.length });
     return {
       content: [{ type: "text", text: formatResults(sliced) }],
       details: { count: sliced.length, providers: providerResults },

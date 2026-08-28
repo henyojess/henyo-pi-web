@@ -339,5 +339,28 @@ describe('searchDuckDuckGo — abort signal & trace', () => {
     expect(results.length).toBeGreaterThan(0);
     const content = fs.readFileSync('/tmp/henyo-trace.log', 'utf-8');
     expect(content).toContain('trace ddg query');
+    expect(content).toContain('status="ok"');
+  });
+
+  it('traces a 429 rate-limit as status="error" error="http-429"', async () => {
+    (globalThis as Record<string, unknown>).__henyoTraceConfig = true;
+    vi.spyOn(global, 'fetch').mockImplementation(async () =>
+      new Response('Rate limited', { status: 429 }),
+    );
+    await expect(searchDuckDuckGo('rate limited query')).rejects.toThrow('RATE_LIMITED');
+    const content = fs.readFileSync('/tmp/henyo-trace.log', 'utf-8');
+    expect(content).toContain('status="error"');
+    expect(content).toContain('error="http-429"');
+  });
+
+  it('traces CAPTCHA detection as status="error" error="captcha"', async () => {
+    (globalThis as Record<string, unknown>).__henyoTraceConfig = true;
+    vi.spyOn(global, 'fetch').mockImplementation(async () =>
+      new Response(DDG_HTML_CAPTCHA, { status: 200, headers: { 'Content-Type': 'text/html' } }),
+    );
+    await expect(searchDuckDuckGo('captcha query')).rejects.toThrow('CAPTCHA');
+    const content = fs.readFileSync('/tmp/henyo-trace.log', 'utf-8');
+    expect(content).toContain('status="error"');
+    expect(content).toContain('error="captcha"');
   });
 });

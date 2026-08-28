@@ -1,10 +1,12 @@
 import { pickRandom, USER_AGENTS } from '../../user-agents';
 import { enqueue } from '../queue';
 import { SearchResult, sanitizeQuery } from './base';
+import { traceEnd } from '../trace';
 
 // ─── Wikipedia Provider ──────────────────────────────────────────────────────
 
 export async function searchWikipedia(query: string, signal?: AbortSignal): Promise<SearchResult[]> {
+  const startTime = Date.now();
   return enqueue('wikipedia', async () => {
     try {
       // Wikipedia's OpenSearch API is a prefix/title search — sanitize to
@@ -19,7 +21,10 @@ export async function searchWikipedia(query: string, signal?: AbortSignal): Prom
       const searchData = await searchRes.json();
       const [titles, descriptions, urls] = searchData.slice(1);
 
-      if (!titles || titles.length === 0) return [];
+      if (!titles || titles.length === 0) {
+        traceEnd('wikipedia', query, startTime, { status: 'no-results', resultCount: 0 });
+        return [];
+      }
 
       // Use batch API to fetch all extracts in one request
       const batchRes = await fetch(
@@ -27,13 +32,15 @@ export async function searchWikipedia(query: string, signal?: AbortSignal): Prom
         { signal, headers: { 'User-Agent': pickRandom(USER_AGENTS) } }
       );
       if (!batchRes.ok) {
-        return titles.map((title: string, i: number) => ({
+        const fallback = titles.map((title: string, i: number) => ({
           title: title.substring(0, 200),
           url: urls[i] || '',
           snippet: descriptions[i] || '',
           domain: 'wikipedia.org',
           source: 'wikipedia',
         }));
+        traceEnd('wikipedia', query, startTime, { status: 'ok', resultCount: fallback.length });
+        return fallback;
       }
 
       const batchData = await batchRes.json();
@@ -63,8 +70,15 @@ export async function searchWikipedia(query: string, signal?: AbortSignal): Prom
         });
       }
 
+      traceEnd('wikipedia', query, startTime, { status: 'ok', resultCount: results.length });
       return results;
     } catch (err) {
+      if (signal?.aborted) {
+        traceEnd('wikipedia', query, startTime, { status: 'aborted', resultCount: 0 });
+      } else {
+        const message = err instanceof Error ? err.message : String(err);
+        traceEnd('wikipedia', query, startTime, { status: 'error', resultCount: 0, error: message });
+      }
       // Re-throw: surface search-call failures, network errors, and aborts.
       // (Batch extract failures already fall back gracefully above.)
       throw err;

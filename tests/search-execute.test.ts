@@ -578,3 +578,71 @@ describe('diversifyByDomain — no-domain bucket', () => {
     expect(out.map((r) => r.title)).toEqual(['a', 'b', 'c']); // order preserved
   });
 });
+
+// ─── Test: tool-layer trace logging ──────────────────────────────────────────
+
+describe('tool-layer trace logging', () => {
+  const LOG = '/tmp/henyo-trace.log';
+
+  function readLog(): string {
+    try {
+      return fs.readFileSync(LOG, 'utf-8');
+    } catch {
+      return '';
+    }
+  }
+
+  afterEach(() => {
+    try {
+      fs.unlinkSync(LOG);
+    } catch {
+      // no log — fine
+    }
+    delete (globalThis as Record<string, unknown>).__henyoTraceConfig;
+  });
+
+  it('cooldown block → trace line with status="cooling-down" and error="<providerKey>"', async () => {
+    rateLimitStore.setCooldown('wikipedia', 60_000);
+    const mockProvider = vi.fn().mockResolvedValue([
+      { title: 'X', url: 'https://x.com', snippet: 's', domain: 'x.com' },
+    ] as SearchResult[]);
+    const executor = createSearchExecute(mockProvider, 'search_wikipedia', true, { trace: true });
+
+    const result = await executor('id', { query: 'cooling-trace', noCache: true }, new AbortController().signal, undefined, {});
+
+    expect(result.details.coolingDown).toBe(true);
+    expect(mockProvider).not.toHaveBeenCalled();
+    const content = readLog();
+    expect(content).toContain('search_wikipedia query="cooling-trace"');
+    expect(content).toContain('status="cooling-down"');
+    expect(content).toContain('error="wikipedia"');
+  });
+
+  it('cache hit → trace line with status="cache-hit" and results=<cached count>', async () => {
+    const toolName = 'search_trace_cachehit';
+    const home = process.env.HOME || process.env.USERPROFILE || '';
+    const dir = `${home}/.pi/tools-cache/${toolName}`;
+    fs.mkdirSync(dir, { recursive: true });
+    const filePath = `${dir}/${createHash('sha256').update(`search:${toolName}:cached-query`).digest('hex')}.json`;
+    fs.writeFileSync(filePath, JSON.stringify({
+      data: [{ title: 'Cached', url: 'https://a.com', snippet: 's', domain: 'a.com' }],
+      timestamp: Date.now(),
+    }), 'utf8');
+
+    try {
+      const mockProvider = vi.fn().mockResolvedValue([] as SearchResult[]);
+      const executor = createSearchExecute(mockProvider, toolName, true, { trace: true });
+
+      const result = await executor('id', { query: 'cached-query' }, new AbortController().signal, undefined, {});
+
+      expect(result.details.cached).toBe(true);
+      expect(mockProvider).not.toHaveBeenCalled();
+      const content = readLog();
+      expect(content).toContain(`search_trace_cachehit query="cached-query"`);
+      expect(content).toContain('status="cache-hit"');
+      expect(content).toContain('results=1');
+    } finally {
+      fs.rmSync(dir, { recursive: true, force: true });
+    }
+  });
+});
