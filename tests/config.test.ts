@@ -23,6 +23,7 @@ describe('loadConfig', () => {
     const config = freshLoad();
 
     expect(config['henyo-fetch'].jinaEnabled).toBe(true);
+    expect(config['henyo-fetch'].waybackEnabled).toBe(true);
     expect(config['henyo-fetch']['min-delay']).toBe(1000);
     expect(config['henyo-fetch']['max-delay']).toBe(3000);
     expect(config['henyo-search']).toEqual({});

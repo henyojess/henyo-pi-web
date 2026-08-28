@@ -505,6 +505,97 @@ describe('fetchPage', () => {
     await expect(fetchPage({ url: 'https://10.0.0.5/x', timeout: 1000, noCache: true, config }))
       .rejects.toThrow('ssrf blocked');
   });
+
+  // ─── Wayback Machine fallback ──────────────────────────────────────────
+
+  it('A: falls back to Wayback on 403 and tags the archived result', async () => {
+    const directUrl = 'https://example.com/';
+    const requested: string[] = [];
+    vi.stubGlobal('fetch', async (url: string) => {
+      requested.push(url);
+      if (url === 'https://web.archive.org/web/https://example.com/') {
+        const res = new Response(mockHtml, {
+          status: 200,
+          headers: { 'Content-Type': 'text/html; charset=utf-8' },
+        });
+        // Response.url is read-only in Node.js — define the redirected snapshot URL
+        Object.defineProperty(res, 'url', {
+          value: 'https://web.archive.org/web/20250224123656/https://example.com/',
+          configurable: true,
+        });
+        return res;
+      }
+      return new Response('Blocked by Cloudflare', { status: 403 });
+    });
+    (extractWithDefuddle as any).mockResolvedValue({
+      bodyText: 'This content is long enough to pass the quality threshold for extraction and be considered a valid result by the pipeline.',
+      title: 'Archived Page',
+      author: '', description: '', date: '', lang: '',
+    });
+    const result = await fetchPage({ url: directUrl, timeout: 10000, noCache: true, config });
+    expect(requested).toEqual([directUrl, 'https://web.archive.org/web/https://example.com/']);
+    expect(result.source).toBe('wayback');
+    expect(result.snapshotDate).toBe('2025-02-24');
+    expect(result.originalUrl).toBe(directUrl);
+    expect(result.text.startsWith('⚠ Archived snapshot from 2025-02-24')).toBe(true);
+  });
+
+  it('B: does not try Wayback when waybackEnabled is false', async () => {
+    const requested: string[] = [];
+    vi.stubGlobal('fetch', async (url: string) => {
+      requested.push(url);
+      return new Response('Blocked', { status: 403 });
+    });
+    await expect(fetchPage({
+      url: 'https://example.com/b', timeout: 10000, noCache: true,
+      config: { ...config, waybackEnabled: false },
+    })).rejects.toThrow('HTTP 403');
+    expect(requested).toEqual(['https://example.com/b']);
+  });
+
+  it('C: does not try Wayback when the caller sends an Authorization header', async () => {
+    const requested: string[] = [];
+    vi.stubGlobal('fetch', async (url: string) => {
+      requested.push(url);
+      return new Response('Blocked', { status: 403 });
+    });
+    await expect(fetchPage({
+      url: 'https://example.com/c', timeout: 10000, noCache: true, config,
+      headers: { Authorization: 'Bearer x' },
+    })).rejects.toThrow('HTTP 403');
+    expect(requested).toEqual(['https://example.com/c']);
+  });
+
+  it('D: rethrows the original 403 error when the Wayback fetch also fails', async () => {
+    vi.stubGlobal('fetch', async (url: string) => {
+      if (url.startsWith('https://web.archive.org/web/')) {
+        return new Response('No snapshot', { status: 404 });
+      }
+      return new Response('Blocked', { status: 403 });
+    });
+    await expect(fetchPage({ url: 'https://example.com/d', timeout: 10000, noCache: true, config }))
+      .rejects.toThrow('HTTP 403');
+  });
+
+  it('E: makes exactly one fetch call for a normal 200 (no Wayback tags)', async () => {
+    const requested: string[] = [];
+    vi.stubGlobal('fetch', async (url: string) => {
+      requested.push(url);
+      const res = new Response(mockHtml, {
+        status: 200,
+        headers: { 'Content-Type': 'text/html; charset=utf-8' },
+      });
+      Object.defineProperty(res, 'url', { value: url, configurable: true });
+      return res;
+    });
+    (extractWithDefuddle as any).mockResolvedValue(defuddleOk('Normal Page'));
+    const result = await fetchPage({ url: 'https://example.com/e', timeout: 10000, noCache: true, config });
+    expect(requested).toEqual(['https://example.com/e']);
+    expect(result.source).toBe('defuddle');
+    expect(result.originalUrl).toBeUndefined();
+    expect(result.snapshotDate).toBeUndefined();
+    expect(result.text).not.toContain('Archived snapshot');
+  });
 });
 
 describe('formatSize', () => {

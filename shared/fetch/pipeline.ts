@@ -72,6 +72,15 @@ export interface FetchResult {
   oversized?: boolean;
   errorCategory?: FetchErrorCategory;
   cached?: boolean;
+  /** Original URL when the content came from the Wayback Machine fallback */
+  originalUrl?: string;
+  /** Snapshot capture date (YYYY-MM-DD) when served from the Wayback Machine */
+  snapshotDate?: string;
+}
+
+/** True iff the error is a blocked HTTP response (401/403/503) as thrown by fetchWithRetry. */
+function isBlockedHttpError(err: unknown): boolean {
+  return err instanceof Error && /^HTTP (401|403|503):/.test(err.message);
 }
 
 export async function fetchPage(options: FetchPageOptions): Promise<FetchResult> {
@@ -104,6 +113,9 @@ export async function fetchPage(options: FetchPageOptions): Promise<FetchResult>
   const jinaTimeout = config['jina-timeout'] ?? 30000;
   const maxResponseSize = config['max-response-size'] ?? 10485760; // 10MB default
   const cacheMaxFiles = config['cache-max-files'] ?? 100;
+  // Wayback fallback eligibility: enabled by config AND no caller Authorization header
+  // (auth-protected fetches must not be silently replaced by archived public snapshots).
+  const waybackEligible = config.waybackEnabled !== false && !headers?.Authorization;
 
   const cache = createCache(
     getCacheDir('henyo_fetch'),
@@ -124,8 +136,31 @@ export async function fetchPage(options: FetchPageOptions): Promise<FetchResult>
   // Delay for politeness
   await delay(minDelay + Math.random() * (maxDelay - minDelay));
 
-  // Fetch with retry
-  const { res, url: resolvedUrl } = await fetchWithRetry(url, timeout, headers);
+  // Fetch with retry — on blocked (401/403/503) responses, fall back to the Wayback
+  // Machine when eligible; if the archive attempt also fails, rethrow the original
+  // error (never mask it).
+  let waybackMode = false;
+  let snapshotDate: string | undefined;
+  let fetched: { res: Response; url: string };
+  try {
+    fetched = await fetchWithRetry(url, timeout, headers);
+  } catch (err) {
+    if (!isBlockedHttpError(err) || !waybackEligible) throw err;
+    waybackMode = true;
+    try {
+      fetched = await fetchWithRetry(`https://web.archive.org/web/${url}`, timeout, headers);
+      // Snapshot date (YYYY-MM-DD) from /web/<14-digit timestamp>/ in the resolved URL;
+      // left undefined if the resolved URL carries no recognizable timestamp.
+      const m = /\/web\/(\d{14})\//.exec(fetched.url);
+      if (m) {
+        const ts = m[1]!;
+        snapshotDate = `${ts.slice(0, 4)}-${ts.slice(4, 6)}-${ts.slice(6, 8)}`;
+      }
+    } catch {
+      throw err; // Wayback failed — rethrow the original (direct) error
+    }
+  }
+  const { res, url: resolvedUrl } = fetched;
 
   // Check max response size (Content-Length header as early check)
   const contentLengthHeader = res.headers.get('Content-Length');
@@ -235,6 +270,16 @@ export async function fetchPage(options: FetchPageOptions): Promise<FetchResult>
   // Step 3: Smart truncation
   const truncatedResult = smartTruncate(extractionResult.bodyText, title, headingThreshold);
 
+  // Wayback fallback: prepend the archive warning after truncation so the tag
+  // cannot be lost to truncation, and override the extraction source.
+  const resultText = waybackMode
+    ? `⚠ Archived snapshot from ${snapshotDate ?? 'unknown date'} (Wayback Machine) — content may be stale. Original URL: ${url}\n\n` + truncatedResult.bodyText
+    : truncatedResult.bodyText;
+  const resultSource = waybackMode ? 'wayback' : (extractionResult.source || 'defuddle');
+  const waybackMeta = waybackMode
+    ? { originalUrl: url, ...(snapshotDate !== undefined ? { snapshotDate } : {}) }
+    : {};
+
   // Step 4: Check if content exceeds threshold
   const contentLength = truncatedResult.bodyText.length;
   if (contentLength > contentThreshold) {
@@ -244,10 +289,10 @@ export async function fetchPage(options: FetchPageOptions): Promise<FetchResult>
     );
     const sizeInfo = formatSize(contentLength);
     const fetchResult: FetchResult = {
-      text: truncatedResult.bodyText,
+      text: resultText,
       resolvedUrl,
       title: truncatedResult.title || '',
-      source: extractionResult.source || 'defuddle',
+      source: resultSource,
       truncated: truncatedResult.truncated,
       contentLengthKB: sizeInfo.contentLengthKB,
       sizeLabel: sizeInfo.sizeLabel,
@@ -256,6 +301,7 @@ export async function fetchPage(options: FetchPageOptions): Promise<FetchResult>
       contentLength: contentLength,
       oversized: true,
       errorCategory: 'size-exceeded',
+      ...waybackMeta,
     };
 
     // Cache the full result
@@ -269,14 +315,15 @@ export async function fetchPage(options: FetchPageOptions): Promise<FetchResult>
   const sizeInfo = formatSize(contentLength);
   const cacheFilePath = keyToPath(getCacheDir('henyo_fetch'), cacheKey);
   const fetchResult: FetchResult = {
-    text: truncatedResult.bodyText,
+    text: resultText,
     resolvedUrl,
     title: truncatedResult.title || '',
-    source: extractionResult.source || 'defuddle',
+    source: resultSource,
     truncated: truncatedResult.truncated,
     contentLengthKB: sizeInfo.contentLengthKB,
     sizeLabel: sizeInfo.sizeLabel,
     cacheFilePath,
+    ...waybackMeta,
   };
 
   // Cache

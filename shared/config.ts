@@ -15,6 +15,8 @@ export type WebSearchConfig = {
 };
 export interface WebFetchConfig {
   jinaEnabled?: boolean;
+  /** Auto-fallback to the Wayback Machine when a direct fetch is blocked (HTTP 401/403/503) */
+  waybackEnabled?: boolean;
   'min-delay'?: number;
   'max-delay'?: number;
   'cache-max-files'?: number;
@@ -34,6 +36,7 @@ const SETTINGS_PATH = path.join(HOME, '.pi', 'agent', 'settings.json');
 const DEFAULTS: Settings = {
   'henyo-fetch': {
     jinaEnabled: true,
+    waybackEnabled: true,
     'min-delay': 1000,
     'max-delay': 3000,
     'cache-max-files': 100,
