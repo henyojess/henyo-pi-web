@@ -27,6 +27,7 @@ import { searchNpm } from "./shared/search/providers/npm";
 import { searchGitHub } from "./shared/search/providers/github";
 import { fetchPage } from "./shared/fetch/pipeline";
 import { createSearchExecute } from "./shared/search/execute";
+import { traceEnd } from "./shared/search/trace";
 import { WEB_TOOL_NAMES, hideWebTools, activateWebTools } from "./shared/web-tools";
 
 function getCacheDir(subdir: string): string {
@@ -305,6 +306,9 @@ export default function (pi: ExtensionAPI) {
     async execute(toolCallId, params, signal, onUpdate, _ctx) {
       const { url, timeout = 15000, noCache = false, headers } = params;
       log('execute: toolCallId=' + toolCallId + ' url=' + url);
+      // Wire trace config (mirror of execute.ts) — henyo-search.trace gates fetch too
+      (globalThis as any).__henyoTraceConfig = config['henyo-search']?.trace ?? false;
+      const startTime = Date.now();
 
       // 100ms delay so TUI can properly update
       await new Promise(r => setTimeout(r, 100));
@@ -323,6 +327,7 @@ export default function (pi: ExtensionAPI) {
         // Handle oversized content — return metadata + read strategy
         if (result.oversized) {
           const wasCached = !noCache && result.cached;
+          traceEnd('henyo-fetch', url, startTime, { status: 'oversized', resultCount: result.contentLength ?? 0 });
           return {
             content: [{
               type: "text",
@@ -353,6 +358,10 @@ export default function (pi: ExtensionAPI) {
           };
         }
 
+        traceEnd('henyo-fetch', url, startTime, {
+          status: result.cached ? 'cache-hit' : (result.source === 'size-exceeded' ? 'size-exceeded' : 'ok'),
+          resultCount: result.text.length,
+        });
         return {
           content: [{ type: "text", text: result.text }],
           details: {
@@ -377,6 +386,7 @@ export default function (pi: ExtensionAPI) {
           message.includes('500') || message.includes('502') || message.includes('503') ? 'server-error' :
           message.includes('fetch failed') || message.includes('network') || message.includes('failed after') ? 'network' :
           'unknown';
+        traceEnd('henyo-fetch', url, startTime, { status: 'error', resultCount: 0, error: errorCategory });
         return {
           content: [{ type: "text", text: message }],
           details: {
