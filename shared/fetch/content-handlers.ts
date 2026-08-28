@@ -134,7 +134,6 @@ export async function handleContent(options: {
         if (contentType.includes(key)) { message = handler.message; source = handler.source; break; }
       }
       if (!message) { message = 'This is a binary file. Content cannot be displayed as text.'; source = 'binary'; }
-      trace(`→ binary fallback: source="${source}" message="${message}"`);
 
       const result: FetchResult = makeResult(
         { resolvedUrl, source, truncated: false }, message, '', body.length,

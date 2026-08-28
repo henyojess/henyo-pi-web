@@ -69,21 +69,6 @@ function options(overrides: Partial<Options>): Options {
   };
 }
 
-// NOTE: handleContent's binary-fallback path calls a bare `trace(...)` that is
-// neither imported nor defined anywhere in the source (latent ReferenceError).
-// Stub it on globalThis so that path can be exercised; assertions on the
-// surrounding behavior are unaffected.
-let traceSpy: ReturnType<typeof vi.fn>;
-
-beforeAll(() => {
-  traceSpy = vi.fn();
-  (globalThis as Record<string, unknown>).trace = traceSpy;
-});
-
-afterAll(() => {
-  delete (globalThis as Record<string, unknown>).trace;
-});
-
 // ─── Tests ───────────────────────────────────────────────────────────────────
 
 describe('handleContent — JSON', () => {
