@@ -64,7 +64,7 @@ title constraint), not just shortening or rephrasing. After 2 failed retries
 - Rate-limited provider (cooling down) → switch to another search tool, as the message advises
 - `search_stackoverflow` 0 hits (no title match) → `search_ddg` with `site:stackoverflow.com <query>` (model-driven — the SE API only AND-matches question titles)
 - `henyo_fetch` 401/403/503 (e.g. Cloudflare blocks) → now auto-recovers via the Wayback Machine when eligible (result tagged `source: 'wayback'` + `snapshotDate` + `originalUrl`); disable with `waybackEnabled: false`
-- Fresh SO content (latest answers/scores) → `henyo_fetch` on `api.stackexchange.com/2.3/questions/{id}` and `.../questions/{id}/answers?order=desc&sort=votes&filter=withbody`; never `henyo_fetch` a `stackoverflow.com` page expecting fresh content
+- Fresh SO content (latest answers/scores) → `henyo_fetch` on `api.stackexchange.com/2.3/questions/{id}?site=stackoverflow` and `.../questions/{id}/answers?site=stackoverflow&order=desc&sort=votes&filter=withbody` (the `site` param is required for by-ID queries — without it the API 400s with `site is required`); never `henyo_fetch` a `stackoverflow.com` page expecting fresh content
 - `henyo_fetch` 404/forbidden on a search result URL → fetch the next result URL instead (403 now auto-recovers via Wayback first — the tagged archived snapshot may be enough)
 
 ## Runtime behavior
