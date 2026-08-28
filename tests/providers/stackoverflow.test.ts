@@ -9,6 +9,43 @@ vi.mock('../../shared/user-agents', async (importOriginal) => {
     delay: () => Promise.resolve(),
   };
 });
+
+vi.mock('../../shared/rate-limit', () => {
+  // In-memory stand-in — keeps API-quota cooldown side effects off the real disk
+  class RateLimitStore {
+    cooldowns = new Map<string, number>();
+    setCooldown(provider: string, durationMs: number) {
+      this.cooldowns.set(provider, Date.now() + durationMs);
+    }
+    remainingMs(provider: string): number {
+      const until = this.cooldowns.get(provider);
+      if (until === undefined) return 0;
+      if (Date.now() >= until) {
+        this.cooldowns.delete(provider);
+        return 0;
+      }
+      return until - Date.now();
+    }
+    clearExpired() {
+      const now = Date.now();
+      for (const [k, v] of this.cooldowns) {
+        if (now >= v) this.cooldowns.delete(k);
+      }
+    }
+  }
+  const rateLimitStore = new RateLimitStore();
+  return {
+    RateLimitStore,
+    rateLimitStore,
+    DEFAULT_RATE_LIMIT_COOLDOWNS: {
+      duckduckgo: 600_000,
+      stackoverflow: 300_000,
+      github: 300_000,
+      npm: 120_000,
+      wikipedia: 60_000,
+    },
+  };
+});
 import {
   SO_HTML_WITH_RESULTS,
   SO_HTML_NO_QUESTIONS,
