@@ -56,4 +56,32 @@ describe('smartTruncate', () => {
     expect(result.truncated).toBe(true);
     expect(result.bodyText).not.toContain('and');
   });
+
+  it('reports the actual shown length, not the threshold', () => {
+    // Shown length at the cut point: '# A' + newline + 100 chars = 104
+    const content = `# A\n${'x'.repeat(100)}\n# B\nrest`;
+    const result = smartTruncate(content, 'Title', 20);
+    expect(result.truncated).toBe(true);
+    expect(result.bodyText).toContain('showing first 104');
+    expect(result.bodyText).toContain(`${content.length} total chars`);
+  });
+
+  it('lists headings after the cut, not the ones already shown', () => {
+    const content = '# A\nx\n# B\ny\n# C\nz';
+    const result = smartTruncate(content, 'Title', 3);
+    expect(result.truncated).toBe(true);
+    const remaining = result.bodyText.split('Remaining headings:\n')[1];
+    expect(remaining).toBe('# B\n# C');
+  });
+
+  it('still caps the remaining list at 10 with a count for the rest', () => {
+    const parts = ['# A', 'x'];
+    for (let i = 1; i <= 14; i++) parts.push(`# H${i}`, 'y');
+    const result = smartTruncate(parts.join('\n'), 'Title', 3);
+    expect(result.truncated).toBe(true);
+    const remaining = result.bodyText.split('Remaining headings:\n')[1];
+    expect(remaining).toContain('# H1');
+    expect(remaining).toContain('... and 4 more headings');
+    expect(remaining).not.toContain('# H11');
+  });
 });
