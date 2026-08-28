@@ -328,6 +328,12 @@ export default function (pi: ExtensionAPI) {
         if (result.oversized) {
           const wasCached = !noCache && result.cached;
           traceEnd('henyo-fetch', url, startTime, { status: 'oversized', resultCount: result.contentLength ?? 0 });
+          // The cache file is the model's only window into oversized content. Only
+          // advertise the path when it actually holds this result: noCache skips the
+          // write entirely, and a cached entry's file may have been evicted.
+          const filePath = !noCache && result.cacheFilePath && fs.existsSync(result.cacheFilePath)
+            ? result.cacheFilePath
+            : undefined;
           return {
             content: [{
               type: "text",
@@ -338,9 +344,13 @@ export default function (pi: ExtensionAPI) {
                 url: result.resolvedUrl,
                 title: result.title,
                 source: result.source,
-                cacheFilePath: result.cacheFilePath,
-                readStrategy: "prefer grep or read(offset/limit) to extract specific sections",
-                warning: "reading the full file may bloat context",
+                ...(filePath
+                  ? {
+                      cacheFilePath: filePath,
+                      readStrategy: "prefer grep or read(offset/limit) to extract specific sections",
+                      warning: "reading the full file may bloat context",
+                    }
+                  : { note: "content exceeded the inline limit and was not persisted to disk — re-run without noCache to cache it" }),
               }, null, 2),
             }],
             details: {
@@ -348,7 +358,7 @@ export default function (pi: ExtensionAPI) {
               title: result.title,
               source: result.source,
               cached: wasCached,
-              cacheFilePath: result.cacheFilePath,
+              cacheFilePath: filePath,
               contentLength: result.contentLength,
               contentLengthKB: result.contentLengthKB,
               sizeLabel: result.sizeLabel,
