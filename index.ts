@@ -27,6 +27,7 @@ import { searchNpm } from "./shared/search/providers/npm";
 import { searchGitHub } from "./shared/search/providers/github";
 import { fetchPage } from "./shared/fetch/pipeline";
 import { createSearchExecute } from "./shared/search/execute";
+import { WEB_TOOL_NAMES, hideWebTools, activateWebTools } from "./shared/web-tools";
 
 function getCacheDir(subdir: string): string {
   const home = process.env.HOME || process.env.USERPROFILE;
@@ -48,6 +49,24 @@ export default function (pi: ExtensionAPI) {
         extPath('skills', 'deep-research'),
       ],
     };
+  });
+
+  // Lazy activation: the six web tools stay registered but inactive until
+  // the `web_tools` loader (or /web-tools) enables them for the session.
+  pi.on('session_start', () => {
+    hideWebTools(pi);
+  });
+
+  pi.registerCommand("web-tools", {
+    description: "Force-activate the web research tools",
+    handler: async (_args, ctx) => {
+      const { added, alreadyActive } = activateWebTools(pi);
+      ctx.ui.notify(
+        added.length > 0
+          ? `Web tools enabled: ${added.join(", ")}`
+          : `Web tools already active: ${alreadyActive.join(", ")}`,
+      );
+    },
   });
 
   // ─── Helper: common cache dir ──────────────────────────────────────────────
@@ -405,6 +424,29 @@ export default function (pi: ExtensionAPI) {
         return new Text(`${header}\n\n  Cache: ${ui.cacheFilePath}`, 0, 0);
       }
       return new Text(header, 0, 0);
+    },
+  });
+
+  // ─── web_tools loader (lazy activation for the six web tools) ──────────────
+  pi.registerTool({
+    name: "web_tools",
+    label: "Web Tools",
+    description:
+      `Enables the web research tools (${WEB_TOOL_NAMES.join(", ")}). Call this first for any ` +
+      "task requiring web search or fetching a URL.",
+    promptSnippet: "Enable the web search/fetch tools before any web research task",
+    parameters: Type.Object({}),
+    async execute() {
+      const { added, alreadyActive } = activateWebTools(pi);
+      return {
+        content: [{
+          type: "text",
+          text: added.length > 0
+            ? `Web tools enabled: ${added.join(", ")}`
+            : `Web tools already active: ${alreadyActive.join(", ")}`,
+        }],
+        details: { added, alreadyActive },
+      };
     },
   });
 
