@@ -47,6 +47,7 @@ export default function (pi: ExtensionAPI) {
     return {
       skillPaths: [
         extPath('skills', 'deep-research'),
+        extPath('skills', 'web-tools'),
       ],
     };
   });
