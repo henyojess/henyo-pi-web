@@ -23,7 +23,7 @@ session.
 |------|---------|---------------|------------------------|
 | `search_ddg` | General web: news, articles, broad topics; fallback when no specialized tool fits | Focused topic, question, or phrase — keep it short | Encyclopedia definitions (→ `search_wikipedia`); programming errors (→ `search_stackoverflow`); package lookups (→ `search_npm`); repo/source searches (→ `search_github`) |
 | `search_wikipedia` | Encyclopedia: definitions, concepts, history, factual background | Short topic names, not full questions | Code errors (→ `search_stackoverflow`); recent news (→ `search_ddg`); package docs (→ `search_npm`); Q&A (→ `search_stackoverflow`) |
-| `search_stackoverflow` | Programming Q&A: error messages, debugging, syntax, API usage | Include the full error message and code pattern | General CS concepts (→ `search_wikipedia`); package docs (→ `search_npm`); repo searches (→ `search_github`); non-programming topics (→ `search_ddg`) |
+| `search_stackoverflow` | Programming Q&A: error messages, debugging, syntax, API usage | Title keywords only — AND semantics, every word must appear in the question title; error text only when copied verbatim into the title (common runtime errors). Vote ranking/answer bodies → `henyo_fetch` SE API (see fallback chains) | General CS concepts (→ `search_wikipedia`); package docs (→ `search_npm`); repo searches (→ `search_github`); non-programming topics (→ `search_ddg`) |
 | `search_npm` | npm registry: package names, JS library lookups, dependency discovery | Package name or functionality — short and specific | General JS questions (→ `search_stackoverflow`); GitHub repos (→ `search_github`); non-JS packages (pip, crates) (→ `search_ddg`) |
 | `search_github` | GitHub: repos, source code, issues | Repo/library names and code patterns — short names, not sentences | Package docs (→ `search_npm`); Q&A (→ `search_stackoverflow`); general web search (→ `search_ddg`) |
 | `henyo_fetch` | Fetch and extract one known URL into clean readable text | Exact URL; `timeout` for slow pages; `headers` for auth | Discovering URLs (search first) |
@@ -34,7 +34,7 @@ session.
 |------|------|-----|-----|
 | `search_ddg` | `Rust async runtime comparison` | `Tell me everything about how async runtimes work in Rust and which one is best and why` | Long multi-clause queries return weaker results |
 | `search_wikipedia` | `Kubernetes` | `how does k8s scheduling work in general?` | Full questions → 0 hits; use the short topic name |
-| `search_stackoverflow` | `TypeError: Cannot read properties of undefined (reading 'map') in React useEffect` | `my code is broken` | The full error message + code pattern is what makes it matchable |
+| `search_stackoverflow` | `debounce function`, `javascript closure`, `Uncaught TypeError: Cannot read properties of undefined (reading 'map')` (verbatim title text) | `how to debounce a function in JavaScript` (full sentence → 0 hits), `memoize javascript` (added word kills all matches → 0 hits) | Every word must appear in the question title (AND semantics) — drop words to retry, don't add them |
 | `search_npm` | `state machine` | `a package that does everything I need` | Functionality must be a concrete capability keyword |
 | `search_github` | `opencode` | `sst/opencode websearch web fetch tool` | Multi-word repo-shaped string → genuine 0 hits; search by the name |
 
@@ -51,18 +51,27 @@ fetch** — it bypasses caching, rate limits, SSRF protection, and extraction.
 A bash fallback is only legitimate after telling the user why the tools are
 unavailable.
 
+**`search_stackoverflow` note:** zero hits here mean no question title contains
+**all** the query words — so retrying means **dropping words** (each word is a
+title constraint), not just shortening or rephrasing. After 2 failed retries
+→ `search_ddg` with `site:stackoverflow.com <query>`.
+
 ## Fallback chains
 
 - Weak `search_ddg` results → `henyo_fetch` a promising URL from them
 - `search_wikipedia` 0 hits on a question → rephrase as a short topic name, or use `search_ddg`
 - `search_npm` 0 hits → `search_github` (repo names), then `search_ddg`
 - Rate-limited provider (cooling down) → switch to another search tool, as the message advises
-- `henyo_fetch` 404/forbidden on a search result URL → fetch the next result URL instead
+- `search_stackoverflow` 0 hits (no title match) → `search_ddg` with `site:stackoverflow.com <query>` (model-driven — the SE API only AND-matches question titles)
+- `henyo_fetch` 401/403/503 (e.g. Cloudflare blocks) → now auto-recovers via the Wayback Machine when eligible (result tagged `source: 'wayback'` + `snapshotDate` + `originalUrl`); disable with `waybackEnabled: false`
+- Fresh SO content (latest answers/scores) → `henyo_fetch` on `api.stackexchange.com/2.3/questions/{id}` and `.../questions/{id}/answers?order=desc&sort=votes&filter=withbody`; never `henyo_fetch` a `stackoverflow.com` page expecting fresh content
+- `henyo_fetch` 404/forbidden on a search result URL → fetch the next result URL instead (403 now auto-recovers via Wayback first — the tagged archived snapshot may be enough)
 
 ## Runtime behavior
 
 - Search results are cached 30 min (`shared/search/execute.ts:34`)
 - Fetches are cached 1 h (`shared/fetch/pipeline.ts:110`)
+- Fetch auto-fallback: 401/403/503 on the direct fetch → Wayback snapshot, tagged `source: 'wayback'` with `snapshotDate`; no freshness cutoff — staleness is the tag's job
 - All six tools accept `noCache` to skip the respective cache
 - "Search cooling down for Ns" is a provider-side cooldown — do not retry that
   provider before N seconds have passed

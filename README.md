@@ -83,11 +83,12 @@ Extract clean readable content from any URL. Uses Defuddle-first extraction with
 - `url` (string) — URL to fetch
 - `timeout` (integer, default 15000) — Timeout in ms (1000–60000)
 - `noCache` (boolean, default false) — Skip cache
-- `headers` (object, optional) — Custom HTTP headers, e.g. `{ "Authorization": "Bearer token" }`
+- `headers` (object, optional) — Custom HTTP headers, e.g. `{ "Authorization": "Bearer token" }` (a custom `User-Agent` — or any header — is honored and overrides the built-in defaults)
 
 **Features:**
 
 - Content-type aware: handles HTML, JSON, plain text, and binary content
+- On 401/403/503 (e.g. Cloudflare blocks), `henyo_fetch` automatically retries via the Wayback Machine; the result is tagged `source: 'wayback'` with the snapshot date and original URL. Disable with `waybackEnabled: false`.
 - Smart truncation with configurable heading/content thresholds
 - Oversized content returns metadata only (URL, title, source, cache path)
 - Politeness delay between requests (configurable min/max)
@@ -97,7 +98,7 @@ Extract clean readable content from any URL. Uses Defuddle-first extraction with
 
 **TUI Features:**
 
-- **Source badges** — color-coded `[defuddle]`, `[jina]`, `[github]`, etc.
+- **Source badges** — color-coded `[defuddle]`, `[jina]`, `[github]`, `[wayback]`, etc.
 - **Size labels** — human-readable sizes (`12.3 KB`, `1.45 MB`)
 - **Status indicators** — `[cached]`, `[truncated]`, `[oversized]` badges
 - **Error cards** — categorized errors with actionable messages
@@ -147,6 +148,7 @@ Optional settings go in `~/.pi/agent/settings.json` (shared with the rest of pi'
 {
   "henyo-fetch": {
     "jinaEnabled": true,
+    "waybackEnabled": true,
     "min-delay": 1000,
     "max-delay": 3000,
     "cache-max-files": 100,
@@ -167,6 +169,7 @@ Optional settings go in `~/.pi/agent/settings.json` (shared with the rest of pi'
 | Option | Type | Default | Description |
 |--------|------|---------|-------------|
 | `jinaEnabled` | boolean | `true` | Enable Jina Reader fallback |
+| `waybackEnabled` | boolean | `true` | Auto-fallback to Wayback Machine on 401/403/503 blocks (result tagged source: 'wayback') |
 | `min-delay` / `max-delay` | number | 1000 / 3000 | Politeness delay range (ms) |
 | `cache-max-files` | number | 100 | Max cached files per directory |
 | `heading-threshold` | number | 40000 | Heading size for smart truncation |
