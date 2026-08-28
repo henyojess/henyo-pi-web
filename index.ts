@@ -205,7 +205,7 @@ export default function (pi: ExtensionAPI) {
     label: "Search npm",
     description:
       "JavaScript package registry search via npm. Use for: package names, JS library functionality, " +
-      "dependency lookups. Don't use for: non-JS packages (pip, crates) (→ search_ddg)."
+      "dependency lookups. Don't use for: non-JS packages (pip, crates) (→ search_ddg).",
     parameters: Type.Object({
       query: Type.String({ description: "Package name or functionality description — short and specific (e.g. 'react', 'state machine')" }),
       max: Type.Optional(Type.Integer({
@@ -246,7 +246,7 @@ export default function (pi: ExtensionAPI) {
     label: "Search GitHub",
     description:
       "Repository and source code search via GitHub. Use for: repo names, library names, code patterns, issues, " +
-      "docs. Query: short names (repo, library, pattern), not full sentences. Don't use for: package docs (→ search_npm)."
+      "docs. Query: short names (repo, library, pattern), not full sentences. Don't use for: package docs (→ search_npm).",
     parameters: Type.Object({
       query: Type.String({ description: "Repository name, library name, or code pattern — short names, not full sentences" }),
       max: Type.Optional(Type.Integer({
