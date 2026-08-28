@@ -1,8 +1,11 @@
 import * as fs from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 
 import { clearTraceLog, readTraceLog, shouldTrace, traceEnd, traceLog } from '../shared/search/trace';
 
-const LOG = '/tmp/henyo-trace.log';
+const LOG = join(fs.mkdtempSync(join(tmpdir(), 'henyo-trace-test-')), 'trace.log');
+(globalThis as Record<string, unknown>).__henyoTraceLogPath = LOG;
 
 function unlinkResidue() {
   for (const p of [LOG, `${LOG}.1`, `${LOG}.2`, `${LOG}.3`]) {

@@ -9,6 +9,9 @@ import { createSearchExecute } from '../shared/search/execute';
 import { rankResults, diversifyByDomain } from '../shared/format';
 import { rateLimitStore } from '../shared/rate-limit';
 import fs from 'node:fs';
+import { mkdtempSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { createHash } from 'node:crypto';
 
 vi.mock('../shared/user-agents', async (importOriginal) => {
@@ -643,7 +646,9 @@ describe('diversifyByDomain — no-domain bucket', () => {
 // ─── Test: tool-layer trace logging ──────────────────────────────────────────
 
 describe('tool-layer trace logging', () => {
-  const LOG = '/tmp/henyo-trace.log';
+  // Per-file log path — parallel test files must not share /tmp/henyo-trace.log.
+  const LOG = join(mkdtempSync(join(tmpdir(), 'henyo-trace-test-')), 'trace.log');
+  (globalThis as Record<string, unknown>).__henyoTraceLogPath = LOG;
 
   function readLog(): string {
     try {

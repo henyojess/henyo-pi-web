@@ -41,7 +41,8 @@ function findPiInstall(): string | null {
 const piDir = findPiInstall();
 const req = piDir ? createRequire(join(piDir, 'dist', 'core', 'extensions', 'loader.js')) : null;
 
-const LOG = '/tmp/henyo-trace.log';
+const LOG = join(fs.mkdtempSync(join(os.tmpdir(), 'henyo-trace-test-')), 'trace.log');
+(globalThis as Record<string, unknown>).__henyoTraceLogPath = LOG;
 const RUN = Date.now(); // unique per run → guaranteed cache misses (idempotent re-runs)
 
 function unlinkLogResidue() {

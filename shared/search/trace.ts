@@ -18,6 +18,16 @@ export type TraceConfig = boolean | string[];
 /** Default trace log path */
 const DEFAULT_TRACE_LOG = path.join('/tmp', 'henyo-trace.log');
 
+/**
+ * Resolve the trace log path. Tests override via
+ * `globalThis.__henyoTraceLogPath` (same pattern as `__henyoTraceConfig`) so
+ * parallel test files don't interleave lines in the shared default log.
+ */
+function traceLogPath(): string {
+  const override = (globalThis as Record<string, unknown>).__henyoTraceLogPath;
+  return typeof override === 'string' ? override : DEFAULT_TRACE_LOG;
+}
+
 /** Default max log file size in bytes (10MB) */
 const DEFAULT_MAX_LOG_SIZE = 10 * 1024 * 1024;
 
@@ -48,8 +58,9 @@ export function traceLog(entry: Omit<TraceEntry, 'timestamp'>): void {
   const logLine = `[${logEntry.timestamp}] ${logEntry.provider} query="${logEntry.query}" duration=${logEntry.durationMs}ms results=${logEntry.resultCount}${logEntry.status ? ` status="${logEntry.status}"` : ''}${logEntry.error ? ` error="${logEntry.error}"` : ''}${logEntry.instance ? ` instance="${logEntry.instance}"` : ''}\n`;
 
   try {
+    const logPath = traceLogPath();
     rotateLog();
-    fs.appendFileSync(DEFAULT_TRACE_LOG, logLine, 'utf-8');
+    fs.appendFileSync(logPath, logLine, 'utf-8');
   } catch {
     // Silently fail — trace logging should never break the extension
   }
@@ -61,24 +72,24 @@ export function traceLog(entry: Omit<TraceEntry, 'timestamp'>): void {
  */
 function rotateLog(): void {
   try {
-    if (!fs.existsSync(DEFAULT_TRACE_LOG)) return;
+    const logPath = traceLogPath();
+    if (!fs.existsSync(logPath)) return;
 
-    const stats = fs.statSync(DEFAULT_TRACE_LOG);
+    const stats = fs.statSync(logPath);
     if (stats.size < DEFAULT_MAX_LOG_SIZE) return;
 
     // Rotate: .1 -> .2 -> .3, delete .3 if exists
     for (let i = DEFAULT_MAX_BACKUPS; i >= 1; i--) {
-      const src = i === 1 ? DEFAULT_TRACE_LOG : `${DEFAULT_TRACE_LOG}.${i - 1}`;
-      const dst = `${DEFAULT_TRACE_LOG}.${i}`;
+      const dst = `${logPath}.${i}`;
 
       if (i === 1) {
         // Move current log to .1
-        if (fs.existsSync(DEFAULT_TRACE_LOG)) {
-          fs.renameSync(DEFAULT_TRACE_LOG, dst);
+        if (fs.existsSync(logPath)) {
+          fs.renameSync(logPath, dst);
         }
       } else {
         // Shift backups
-        const prev = `${DEFAULT_TRACE_LOG}.${i - 1}`;
+        const prev = `${logPath}.${i - 1}`;
         if (fs.existsSync(prev)) {
           fs.renameSync(prev, dst);
         }
@@ -137,8 +148,9 @@ export function traceEnd(
  */
 export function clearTraceLog(): void {
   try {
-    if (fs.existsSync(DEFAULT_TRACE_LOG)) {
-      fs.unlinkSync(DEFAULT_TRACE_LOG);
+    const logPath = traceLogPath();
+    if (fs.existsSync(logPath)) {
+      fs.unlinkSync(logPath);
     }
   } catch {
     // Silently fail
@@ -150,8 +162,9 @@ export function clearTraceLog(): void {
  */
 export function readTraceLog(): string {
   try {
-    if (!fs.existsSync(DEFAULT_TRACE_LOG)) return '';
-    return fs.readFileSync(DEFAULT_TRACE_LOG, 'utf-8');
+    const logPath = traceLogPath();
+    if (!fs.existsSync(logPath)) return '';
+    return fs.readFileSync(logPath, 'utf-8');
   } catch {
     return '';
   }
