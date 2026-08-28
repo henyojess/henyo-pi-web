@@ -2,7 +2,13 @@ import * as fs from 'node:fs';
 import * as path from 'node:path';
 
 /**
- * Trace logging configuration.
+ * Trace logging for the whole henyo search & fetch process.
+ * - Search: tool layer (search_ddg, …) and provider layer (duckduckgo, …),
+ *   including rate-limit events (cooldowns set on 429/CAPTCHA/API quota).
+ * - Fetch: henyo_fetch tool layer (cache, SSRF/size blocks, extraction, errors).
+ *
+ * Gating via `globalThis.__henyoTraceConfig` (set by execute.ts / index.ts
+ * from the `henyo-search.trace` setting):
  * - `true`: trace all providers
  * - `string[]`: trace only specified provider names
  * - `undefined` or `false`: no trace logging
@@ -24,6 +30,7 @@ interface TraceEntry {
   query: string;
   durationMs: number;
   resultCount: number;
+  status?: string;
   error?: string;
   instance?: string;
 }
@@ -38,7 +45,7 @@ export function traceLog(entry: Omit<TraceEntry, 'timestamp'>): void {
     timestamp: new Date().toISOString(),
   };
 
-  const logLine = `[${logEntry.timestamp}] ${logEntry.provider} query="${logEntry.query}" duration=${logEntry.durationMs}ms results=${logEntry.resultCount}${logEntry.error ? ` error="${logEntry.error}"` : ''}${logEntry.instance ? ` instance="${logEntry.instance}"` : ''}\n`;
+  const logLine = `[${logEntry.timestamp}] ${logEntry.provider} query="${logEntry.query}" duration=${logEntry.durationMs}ms results=${logEntry.resultCount}${logEntry.status ? ` status="${logEntry.status}"` : ''}${logEntry.error ? ` error="${logEntry.error}"` : ''}${logEntry.instance ? ` instance="${logEntry.instance}"` : ''}\n`;
 
   try {
     rotateLog();
@@ -97,6 +104,32 @@ export function shouldTrace(config: TraceConfig | undefined, providerName: strin
   if (config === true) return true;
   if (Array.isArray(config)) return config.includes(providerName);
   return false;
+}
+
+/**
+ * Log the outcome of a search/fetch call, gated by `globalThis.__henyoTraceConfig`.
+ * No-op (no write) unless the caller is being traced.
+ * @param provider Tool name (e.g. `search_ddg`) or provider name (e.g. `duckduckgo`) / `henyo-fetch`
+ * @param query The query or URL
+ * @param startTime `Date.now()` captured at call start (duration is computed here)
+ * @param entry Outcome: `status` (closed vocabulary), `resultCount` (0 default; content bytes for fetch), `error`, `instance`
+ */
+export function traceEnd(
+  provider: string,
+  query: string,
+  startTime: number,
+  entry: { status?: string; resultCount?: number; error?: string; instance?: string },
+): void {
+  if (!shouldTrace((globalThis as any).__henyoTraceConfig, provider)) return;
+  traceLog({
+    provider,
+    query,
+    durationMs: Date.now() - startTime,
+    resultCount: entry.resultCount ?? 0,
+    status: entry.status,
+    error: entry.error,
+    instance: entry.instance,
+  });
 }
 
 /**

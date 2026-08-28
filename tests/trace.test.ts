@@ -1,6 +1,6 @@
 import * as fs from 'node:fs';
 
-import { clearTraceLog, readTraceLog, shouldTrace, traceLog } from '../shared/search/trace';
+import { clearTraceLog, readTraceLog, shouldTrace, traceEnd, traceLog } from '../shared/search/trace';
 
 const LOG = '/tmp/henyo-trace.log';
 
@@ -71,6 +71,44 @@ describe('trace log round-trips', () => {
     expect(lines).toHaveLength(2);
     expect(lines[0]!).toContain('a');
     expect(lines[1]!).toContain('b');
+  });
+});
+
+describe('trace status field', () => {
+  it('renders status="…" when set (after results, before error) and omits status= when unset', () => {
+    traceLog({
+      provider: 'search_ddg',
+      query: 'q',
+      durationMs: 5,
+      resultCount: 0,
+      status: 'ok',
+      error: 'http-429',
+    });
+    traceLog({ provider: 'duckduckgo', query: 'q', durationMs: 5, resultCount: 3 });
+    const [first, second] = readTraceLog().trim().split('\n');
+    expect(first).toContain('results=0 status="ok" error="http-429"');
+    expect(second).not.toContain('status='); // back-compat format
+  });
+});
+
+describe('traceEnd', () => {
+  afterEach(() => {
+    delete (globalThis as Record<string, unknown>).__henyoTraceConfig;
+  });
+
+  it('respects gating: writes nothing when config is false, a line (with computed duration) when true', () => {
+    (globalThis as Record<string, unknown>).__henyoTraceConfig = false;
+    traceEnd('search_ddg', 'q', Date.now() - 10, { status: 'ok', resultCount: 3 });
+    expect(readTraceLog()).toBe('');
+
+    (globalThis as Record<string, unknown>).__henyoTraceConfig = true;
+    const start = Date.now() - 42;
+    traceEnd('search_ddg', 'q', start, { status: 'ok', resultCount: 3 });
+    const line = readTraceLog().trim();
+    expect(line).toContain('search_ddg query="q"');
+    expect(line).toMatch(/duration=(42|43)ms/);
+    expect(line).toContain('results=3');
+    expect(line).toContain('status="ok"');
   });
 });
 
