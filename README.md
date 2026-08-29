@@ -128,6 +128,13 @@ henyo-pi-web/
 └── README.md
 ```
 
+## Testing & coverage
+
+- `pnpm test` runs the full suite (32 test files) with no coverage collection. `pnpm coverage` runs the same suite under v8 coverage but **excludes `tests/index-load.test.ts` and `tests/fetch-trace.test.ts`**: those two load `index.ts` through jiti, a second module loader whose transformed copies of `shared/*.ts` collide with vitest's native scripts during v8 merge (`same file URL, different function ranges` → spurious uncovered lines; ~84.5% reported vs ~98.2% true before the exclusion).
+- `vitest.config.ts` sets coverage thresholds at observed-final-minus-0.5 (lines 99.3 / statements 99.32 / branches 97.63 / functions 99.5), so a regression of ≥ 0.5 points fails the coverage run. The residual branch gaps below the thresholds are unreachable defensive code or v8→istanbul mapping artifacts, dispositioned in the coverage plan.
+- Unreachable defensive code was deleted rather than papered over with tests: the `security.ts` IP null-paths, `html-extraction.ts` trailing fallback, `trace.ts` over-bound unlink check, and `cache.ts` eviction guard wrapper in commit `4fb774b` (eviction at `maxFiles=0` no longer hangs), plus the `duckduckgo.ts` `!html` guard in `4dd1205`.
+- Current coverage (`pnpm coverage`, `shared/**/*.ts`): **99.82% statements, 98.13% branches, 100% functions, 99.8% lines** (1137/1139 statements, 735/749 branches, 135/135 functions, 1023/1025 lines).
+
 ## Bundled Skills
 
 ### `/skill:deep-research`
