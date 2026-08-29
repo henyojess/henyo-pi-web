@@ -327,7 +327,7 @@ export default function (pi: ExtensionAPI) {
         // Handle oversized content — return metadata + read strategy
         if (result.oversized) {
           const wasCached = !noCache && result.cached;
-          traceEnd('henyo-fetch', url, startTime, { status: 'oversized', resultCount: result.contentLength ?? 0 });
+          traceEnd('henyo-fetch', url, startTime, { status: wasCached ? 'cache-hit' : 'oversized', resultCount: result.contentLength ?? 0 });
           // The cache file is the model's only window into oversized content. Only
           // advertise the path when it actually holds this result: noCache skips the
           // write entirely, and a cached entry's file may have been evicted.

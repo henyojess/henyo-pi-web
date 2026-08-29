@@ -188,6 +188,44 @@ describe.skipIf(!piDir)('henyo_fetch trace logging (jiti-loaded extension)', () 
     expect(lines[1]).toContain('status="cache-hit"');
   }, 30_000);
 
+  it('cached re-fetch of an oversized URL → status="cache-hit", not "oversized"', async () => {
+    const url = `https://example.com/fetch-trace-oversized-cache-${RUN}`;
+    // ~54k chars of body text → above the 32k content threshold → oversized
+    const bigHtml = `<!DOCTYPE html>
+<html>
+  <head><title>Oversized Trace Test Page</title></head>
+  <body>
+    <h1>Oversized Trace Test Page</h1>
+    <p>${'lorem ipsum dolor sit amet '.repeat(2000)}</p>
+  </body>
+</html>`;
+    vi.spyOn(global, 'fetch').mockImplementation(async () =>
+      new Response(bigHtml, { status: 200, headers: { 'Content-Type': 'text/html' } }),
+    );
+    (globalThis as Record<string, unknown>).__henyoTraceConfig = true;
+
+    const first = await henyoFetchTool.execute(
+      'tc-os-1', { url, timeout: 1000 }, new AbortController().signal, undefined, {},
+    );
+    expect(first.details.oversized).toBe(true);
+    const callsAfterFirst = vi.mocked(global.fetch).mock.calls.length;
+
+    const second = await henyoFetchTool.execute(
+      'tc-os-2', { url, timeout: 1000 }, new AbortController().signal, undefined, {},
+    );
+    expect(second.details.cached).toBe(true);
+    expect(second.details.oversized).toBe(true);
+    expect(vi.mocked(global.fetch).mock.calls.length).toBe(callsAfterFirst);
+
+    const lines = readLog().trim().split('\n');
+    expect(lines).toHaveLength(2);
+    expect(lines[0]).toContain('status="oversized"');
+    // The oversized branch must honor the cache like the normal path does —
+    // a cached re-fetch is a cache-hit even when the content is oversized.
+    expect(lines[1]).toContain('status="cache-hit"');
+    expect(lines[1]).not.toContain('status="oversized"');
+  }, 30_000);
+
   it('fetch rejects → status="error" error="network"', async () => {
     const url = `https://example.com/fetch-trace-error-${RUN}`;
     vi.spyOn(global, 'fetch').mockRejectedValue(new Error('fetch failed'));
