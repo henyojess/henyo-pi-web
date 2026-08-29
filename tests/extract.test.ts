@@ -91,6 +91,45 @@ describe('extractWithDefuddle', () => {
     const result = await extractWithDefuddle('<html><body></body></html>', 'https://x.com');
     expect(result.date).toBe('');
   });
+
+  it('suppresses Defuddle console output via the no-op bodies and restores the originals', async () => {
+    const realError = console.error;
+    const realLog = console.log;
+    let leaked = false;
+    vi.spyOn(console, 'error').mockImplementation(() => { leaked = true; });
+    vi.spyOn(console, 'log').mockImplementation(() => { leaked = true; });
+    // Real Defuddle calls console.error during extraction (verified in
+    // defuddle 0.19.1 dist L1472: 'Error parsing schema.org data' on malformed
+    // JSON-LD) and console.log in debug mode (L971) — the mock mirrors that so
+    // the no-op bodies at extract.ts L18/L19 execute exactly as in production.
+    mockDefuddle.mockImplementation(async () => {
+      console.error('Defuddle: Error parsing schema.org data:', new Error('bad json'));
+      console.log('Defuddle: debug message');
+      return {
+        content: 'Body text long enough for a normal extraction result here.',
+        title: 'Test Page',
+        author: '',
+        description: '',
+        date: '',
+        lang: '',
+      };
+    });
+    const html =
+      '<html><head><title>Test Page</title></head><body><main>Body text long enough for a normal extraction result here.</main>' +
+      "<script type='application/ld+json'>{'name': </script></body></html>";
+    try {
+      const result = await extractWithDefuddle(html, 'https://example.com');
+      expect(result.title).toBe('Test Page');
+      expect(result.bodyText.length).toBeGreaterThan(0);
+    } finally {
+      vi.restoreAllMocks();
+    }
+    // The no-op bodies absorbed both calls — nothing reached the spies
+    expect(leaked).toBe(false);
+    // finally block restored the pre-call references
+    expect(console.error).toBe(realError);
+    expect(console.log).toBe(realLog);
+  });
 });
 
 describe('fetchWithJina', () => {
