@@ -1,5 +1,8 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { searchStackOverflow, searchStackOverflowAPI, StackOverflowAPIError } from '../../shared/search/providers';
+import fs, { mkdtempSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 
 vi.mock('../../shared/user-agents', async (importOriginal) => {
   const actual = await importOriginal<typeof import('../../shared/user-agents')>();
@@ -198,6 +201,119 @@ describe('searchStackOverflow', () => {
     const results = await searchStackOverflow('test');
     expect(results[0].domain).toBe('stackoverflow.com');
   });
+
+  it('API HTTP 500 (non-quota) → error trace tagged so-api-http-500, then falls back to scraper', async () => {
+    const LOG = join(mkdtempSync(join(tmpdir(), 'henyo-trace-test-')), 'trace.log');
+    (globalThis as Record<string, unknown>).__henyoTraceLogPath = LOG;
+    (globalThis as Record<string, unknown>).__henyoTraceConfig = ['stackoverflow'];
+    try {
+      vi.spyOn(global, 'fetch').mockImplementation(async (url: string) => {
+        if (url.includes('api.stackexchange.com')) {
+          return new Response('Internal Server Error', { status: 500 });
+        }
+        return new Response(SO_JINA_HTML_WITH_RESULTS, { status: 200, headers: { 'Content-Type': 'text/plain' } });
+      });
+      const results = await searchStackOverflow('test');
+      expect(results.length).toBeGreaterThan(0);
+      const log = fs.readFileSync(LOG, 'utf8');
+      expect(log).toContain('status="error"');
+      expect(log).toContain('error="so-api-http-500"');
+    } finally {
+      try { fs.unlinkSync(LOG); } catch { /* no log — fine */ }
+      delete (globalThis as Record<string, unknown>).__henyoTraceConfig;
+      delete (globalThis as Record<string, unknown>).__henyoTraceLogPath;
+    }
+  });
+
+  it('non-Error API failure → error tag is String(err)', async () => {
+    const LOG = join(mkdtempSync(join(tmpdir(), 'henyo-trace-test-')), 'trace.log');
+    (globalThis as Record<string, unknown>).__henyoTraceLogPath = LOG;
+    (globalThis as Record<string, unknown>).__henyoTraceConfig = ['stackoverflow'];
+    try {
+      // reject with a bare string: not a StackOverflowAPIError and not an Error
+      vi.spyOn(global, 'fetch').mockRejectedValue('api down');
+      await expect(searchStackOverflow('test')).rejects.toThrow('StackOverflow scraper unavailable');
+      const log = fs.readFileSync(LOG, 'utf8');
+      expect(log).toContain('error="api down"');
+    } finally {
+      try { fs.unlinkSync(LOG); } catch { /* no log — fine */ }
+      delete (globalThis as Record<string, unknown>).__henyoTraceConfig;
+      delete (globalThis as Record<string, unknown>).__henyoTraceLogPath;
+    }
+  });
+
+  it('non-HTTP Error API failure → error tag is the original message', async () => {
+    const LOG = join(mkdtempSync(join(tmpdir(), 'henyo-trace-test-')), 'trace.log');
+    (globalThis as Record<string, unknown>).__henyoTraceLogPath = LOG;
+    (globalThis as Record<string, unknown>).__henyoTraceConfig = ['stackoverflow'];
+    try {
+      vi.spyOn(global, 'fetch').mockImplementation(async (url: string) => {
+        if (url.includes('api.stackexchange.com')) {
+          throw new Error('network timeout'); // Error, but no "StackOverflow API HTTP n" message
+        }
+        return new Response('blocked', { status: 403 }); // Jina fails too
+      });
+      await expect(searchStackOverflow('test')).rejects.toThrow('StackOverflow scraper unavailable');
+      const log = fs.readFileSync(LOG, 'utf8');
+      expect(log).toContain('error="network timeout"');
+      expect(log).toContain('error="scraper-unavailable"');
+    } finally {
+      try { fs.unlinkSync(LOG); } catch { /* no log — fine */ }
+      delete (globalThis as Record<string, unknown>).__henyoTraceConfig;
+      delete (globalThis as Record<string, unknown>).__henyoTraceLogPath;
+    }
+  });
+
+  it('aborted during the scraper (after the API failure) → aborted trace from the scraper catch', async () => {
+    const LOG = join(mkdtempSync(join(tmpdir(), 'henyo-trace-test-')), 'trace.log');
+    (globalThis as Record<string, unknown>).__henyoTraceLogPath = LOG;
+    (globalThis as Record<string, unknown>).__henyoTraceConfig = ['stackoverflow'];
+    try {
+      const controller = new AbortController();
+      vi.spyOn(global, 'fetch').mockImplementation(async (url: string) => {
+        if (url.includes('api.stackexchange.com')) {
+          // API fails with a plain HTTP error while the signal is still live →
+          // the fallback scraper is attempted
+          return new Response('Internal Server Error', { status: 500 });
+        }
+        // Abort right before the Jina attempt: the scraper catch then sees
+        // signal.aborted === true
+        controller.abort();
+        throw new Error('Aborted');
+      });
+      await expect(searchStackOverflow('test', controller.signal)).rejects.toThrow('StackOverflow scraper unavailable');
+      const log = fs.readFileSync(LOG, 'utf8');
+      expect(log).toContain('error="so-api-http-500"');
+      expect(log).toContain('status="aborted"');
+    } finally {
+      try { fs.unlinkSync(LOG); } catch { /* no log — fine */ }
+      delete (globalThis as Record<string, unknown>).__henyoTraceConfig;
+      delete (globalThis as Record<string, unknown>).__henyoTraceLogPath;
+    }
+  });
+
+  it('API fails + Jina fails → error tag scraper-unavailable', async () => {
+    const LOG = join(mkdtempSync(join(tmpdir(), 'henyo-trace-test-')), 'trace.log');
+    (globalThis as Record<string, unknown>).__henyoTraceLogPath = LOG;
+    (globalThis as Record<string, unknown>).__henyoTraceConfig = ['stackoverflow'];
+    try {
+      vi.spyOn(global, 'fetch').mockImplementation(async (url: string) => {
+        if (url.includes('api.stackexchange.com')) {
+          return new Response('Not Found', { status: 404 });
+        }
+        // Jina Reader blocked → scraper throws "StackOverflow scraper unavailable"
+        return new Response('blocked', { status: 403 });
+      });
+      await expect(searchStackOverflow('test')).rejects.toThrow('StackOverflow scraper unavailable');
+      const log = fs.readFileSync(LOG, 'utf8');
+      expect(log).toContain('error="so-api-http-404"');
+      expect(log).toContain('error="scraper-unavailable"');
+    } finally {
+      try { fs.unlinkSync(LOG); } catch { /* no log — fine */ }
+      delete (globalThis as Record<string, unknown>).__henyoTraceConfig;
+      delete (globalThis as Record<string, unknown>).__henyoTraceLogPath;
+    }
+  });
 });
 
 // ─── searchStackOverflowAPI ──────────────────────────────────────────────────
@@ -339,6 +455,30 @@ describe('searchStackOverflowAPI', () => {
       expect((err as StackOverflowAPIError).quotaRemaining).toBe(0);
     }
   });
+
+  it('uses field fallbacks: no items key, no body, no link', async () => {
+    vi.spyOn(global, 'fetch').mockImplementation(async () => {
+      return new Response(JSON.stringify({
+        quota_remaining: 100000,
+        items: [{ title: 'No body or link', question_id: 999 }],
+      }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      });
+    });
+    const results = await searchStackOverflowAPI('test');
+    expect(results).toHaveLength(1);
+    expect(results[0].snippet).toBe(''); // body || ''
+    expect(results[0].url).toBe('https://stackoverflow.com/questions/999'); // link fallback
+
+    vi.spyOn(global, 'fetch').mockImplementation(async () => {
+      return new Response(JSON.stringify({ quota_remaining: 100000 }), { // no items key
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      });
+    });
+    expect(await searchStackOverflowAPI('test')).toEqual([]);
+  });
 });
 
 // ─── Method 2: plain-fetch HTML parsing (parseHtmlResults) ──────────────────
@@ -402,6 +542,33 @@ describe('searchStackOverflow method 2 (plain fetch)', () => {
     mockMethod2(SO_HTML_EMPTY_TITLE);
     const results = await searchStackOverflow('test');
     expect(results).toEqual([]);
+  });
+
+  it('dedupes repeated links and uses an empty snippet when the block has no <p>', async () => {
+    const html = `
+<div class="s-prose js-post-body">
+  <a class="s-link" href="/questions/1/first-question">First Question</a>
+  <p class="">A snippet here.</p>
+</div>
+</div>
+</div>
+<div class="s-prose js-post-body">
+  <a class="s-link" href="/questions/1/first-question">First Question duplicate</a>
+</div>
+</div>
+</div>
+<div class="s-prose js-post-body">
+  <a class="s-link" href="/questions/2/no-snippet-question">No Snippet</a>
+</div>
+</div>
+</div>
+`;
+    mockMethod2(html);
+    const results = await searchStackOverflow('test');
+    expect(results).toHaveLength(2); // duplicate link dropped
+    expect(results[0].title).toBe('First Question');
+    expect(results[1].title).toBe('No Snippet');
+    expect(results[1].snippet).toBe(''); // no <p> in the block
   });
 
   it('truncates long plain-HTML titles to 200 chars', async () => {

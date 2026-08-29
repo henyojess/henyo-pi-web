@@ -1,6 +1,9 @@
 import { describe, it, expect, vi } from 'vitest';
 import { searchGitHub } from '../../shared/search/providers';
 import { rateLimitStore } from '../../shared/rate-limit';
+import fs, { mkdtempSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 
 vi.mock('../../shared/user-agents', async (importOriginal) => {
   const actual = await importOriginal<typeof import('../../shared/user-agents')>();
@@ -158,5 +161,122 @@ describe('searchGitHub', () => {
     });
     const results = await searchGitHub('test');
     expect(results).toEqual([]);
+  });
+
+  it('falls back to unknown/unknown when the issue html_url is not a github owner/name path', async () => {
+    // Exercises repoFromHtmlUrl's '' sides: non-github host, a github.com URL with
+    // no owner/name path components, and the catch (unparseable URL).
+    mockGitHubFetch(
+      JSON.stringify({ items: [] }),
+      JSON.stringify({
+        items: [
+          {
+            number: 9,
+            title: 'Weird host issue',
+            state: 'open',
+            body: 'b',
+            html_url: 'https://gitlab.com/o/r/issues/9',
+            comments: 0,
+            reactions: { total_count: 0 },
+          },
+          {
+            number: 10,
+            title: 'Bare github URL',
+            state: 'open',
+            body: 'b',
+            html_url: 'https://github.com/',
+            comments: 0,
+            reactions: { total_count: 0 },
+          },
+          {
+            number: 11,
+            title: 'Unparseable URL',
+            state: 'open',
+            body: 'b',
+            html_url: 'not-a-url',
+            comments: 0,
+            reactions: { total_count: 0 },
+          },
+          {
+            number: 12,
+            title: 'No body',
+            state: 'closed',
+            body: '', // empty body → stats-only snippet
+            html_url: 'https://github.com/x/y/issues/12',
+            comments: 2,
+            reactions: { total_count: 3 },
+          },
+          {
+            number: 13,
+            title: 'Long body',
+            state: 'open',
+            body: 'A body that is definitely longer than one hundred and sixty characters so the excerpt truncation with the ellipsis marker gets exercised by the issue mapper in this test.',
+            html_url: 'https://github.com/x/z/issues/13',
+            comments: 0,
+            reactions: { total_count: 0 },
+          },
+        ],
+      }),
+    );
+    const results = await searchGitHub('weird hosts');
+    expect(results.map(r => r.title)).toEqual([
+      'unknown/unknown#9 [open] — Weird host issue',
+      'unknown/unknown#10 [open] — Bare github URL',
+      'unknown/unknown#11 [open] — Unparseable URL',
+      'x/y#12 [closed] — No body',
+      'x/z#13 [open] — Long body',
+    ]);
+    // Empty body → no excerpt → snippet is the stats line only
+    expect(results[3].snippet).toBe('2 comments, 3 👍');
+    // Long body → excerpt truncated at 160 chars with an ellipsis
+    expect(results[4].snippet).toContain('…');
+  });
+
+  it('already-aborted signal: both endpoints reject, re-throws with aborted trace', async () => {
+    const LOG = join(mkdtempSync(join(tmpdir(), 'henyo-trace-test-')), 'trace.log');
+    (globalThis as Record<string, unknown>).__henyoTraceLogPath = LOG;
+    (globalThis as Record<string, unknown>).__henyoTraceConfig = ['github'];
+    try {
+      vi.spyOn(global, 'fetch').mockRejectedValue(new Error('Aborted'));
+      const controller = new AbortController();
+      controller.abort();
+      await expect(searchGitHub('aborted query', controller.signal)).rejects.toThrow('Aborted');
+      const log = fs.readFileSync(LOG, 'utf8');
+      expect(log).toContain('github');
+      expect(log).toContain('status="aborted"');
+    } finally {
+      try { fs.unlinkSync(LOG); } catch { /* no log — fine */ }
+      delete (globalThis as Record<string, unknown>).__henyoTraceConfig;
+      delete (globalThis as Record<string, unknown>).__henyoTraceLogPath;
+    }
+  });
+
+  it('aborted with a fulfilled repositories outcome uses the issues rejection reason', async () => {
+    // repositories resolves (rejectedReason → undefined) → the ?? falls through to
+    // the issues outcome; rejectedReason also takes its fulfilled side here.
+    vi.spyOn(global, 'fetch').mockImplementation(async (url: string) => {
+      if (url.includes('/search/issues')) {
+        throw new Error('Aborted');
+      }
+      return new Response(JSON.stringify({ items: [] }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      });
+    });
+    const controller = new AbortController();
+    controller.abort();
+    await expect(searchGitHub('partial abort', controller.signal)).rejects.toThrow('Aborted');
+  });
+
+  it('aborted with non-Error rejection reasons throws the synthesized "Aborted" error', async () => {
+    vi.spyOn(global, 'fetch').mockRejectedValue('boom-string');
+    const controller = new AbortController();
+    controller.abort();
+    await expect(searchGitHub('string abort', controller.signal)).rejects.toThrow('Aborted');
+  });
+
+  it('both endpoints fail with non-Error reasons → throws "GitHub API search failed"', async () => {
+    vi.spyOn(global, 'fetch').mockRejectedValue('boom-string');
+    await expect(searchGitHub('double fail')).rejects.toThrow('GitHub API search failed');
   });
 });

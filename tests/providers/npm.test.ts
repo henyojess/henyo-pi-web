@@ -1,5 +1,8 @@
 import { describe, it, expect, vi } from 'vitest';
 import { searchNpm } from '../../shared/search/providers';
+import fs, { mkdtempSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 
 vi.mock('../../shared/user-agents', async (importOriginal) => {
   const actual = await importOriginal<typeof import('../../shared/user-agents')>();
@@ -89,5 +92,42 @@ describe('searchNpm — edge cases', () => {
       throw new Error('Network error');
     });
     await expect(searchNpm('test')).rejects.toThrow('Network error');
+  });
+
+  it('non-aborted failure re-throws and writes an error trace with the original message', async () => {
+    const LOG = join(mkdtempSync(join(tmpdir(), 'henyo-trace-test-')), 'trace.log');
+    (globalThis as Record<string, unknown>).__henyoTraceLogPath = LOG;
+    (globalThis as Record<string, unknown>).__henyoTraceConfig = ['npm'];
+    try {
+      vi.spyOn(global, 'fetch').mockImplementation(async () => {
+        throw new Error('registry network boom');
+      });
+      await expect(searchNpm('test')).rejects.toThrow('registry network boom');
+      const log = fs.readFileSync(LOG, 'utf8');
+      expect(log).toContain('npm');
+      expect(log).toContain('status="error"');
+      expect(log).toContain('error="registry network boom"');
+    } finally {
+      try { fs.unlinkSync(LOG); } catch { /* no log — fine */ }
+      delete (globalThis as Record<string, unknown>).__henyoTraceConfig;
+      delete (globalThis as Record<string, unknown>).__henyoTraceLogPath;
+    }
+  });
+
+  it('non-Error failure (string rejection) is traced via String(err) and re-thrown as-is', async () => {
+    const LOG = join(mkdtempSync(join(tmpdir(), 'henyo-trace-test-')), 'trace.log');
+    (globalThis as Record<string, unknown>).__henyoTraceLogPath = LOG;
+    (globalThis as Record<string, unknown>).__henyoTraceConfig = ['npm'];
+    try {
+      vi.spyOn(global, 'fetch').mockRejectedValue('registry string failure');
+      await expect(searchNpm('test')).rejects.toEqual('registry string failure');
+      const log = fs.readFileSync(LOG, 'utf8');
+      expect(log).toContain('status="error"');
+      expect(log).toContain('error="registry string failure"');
+    } finally {
+      try { fs.unlinkSync(LOG); } catch { /* no log — fine */ }
+      delete (globalThis as Record<string, unknown>).__henyoTraceConfig;
+      delete (globalThis as Record<string, unknown>).__henyoTraceLogPath;
+    }
   });
 });
