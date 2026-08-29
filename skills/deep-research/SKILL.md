@@ -27,6 +27,25 @@ User Query → Plan → Retrieve → Synthesize → Verify → Report
 - **Multi-source:** Never trust a single source; cross-validate across at least 3 independent sources
 - **Adaptive:** Refine the research plan based on intermediate findings
 
+## Artifact Location
+
+All artifacts for a research run live in one per-topic folder under the working directory:
+
+- `research/<slug>/plan.md`
+- `research/<slug>/report.md`
+- `research/<slug>/findings/NN-topic.md`
+- `research/<slug>/findings/NN-topic-followup.md`
+- `research/<slug>/findings/evidence-map.md`
+- `research/<slug>/findings/gaps.md`
+
+**Slug rule:** `<slug>` is kebab-case, lowercase, and as short as possible while still identifying the topic — typically 2–4 words (e.g., `medusajs-viability`, `node-cms-options`). Decide it once during Phase 1 (Step 1.2) and use it for every artifact in the run.
+
+**Reuse rule:** If `research/<slug>/` already exists from an earlier run, reuse it — continue the existing artifacts instead of starting over.
+
+**Overrides:**
+- If the user specifies a different location for the artifacts, the user's location wins.
+- If the user says not to write files, write nothing — keep all plan, findings, and report content in the chat.
+
 ## Phase 1 — Intent Clarification & Planning
 
 Before any searching, establish the research scope and structure.
@@ -61,7 +80,7 @@ Break the research question into 3–7 subtasks. Each subtask should:
 **Expected Output:** <report format description>
 ```
 
-Write the plan to a file named `research-plan.md` in the working directory.
+Write the plan to `research/<slug>/plan.md` (see [Artifact Location](#artifact-location)).
 
 ## Phase 2 — Iterative Retrieval
 
@@ -146,7 +165,7 @@ For each source, extract:
 - Contradictory or conflicting claims
 - Gaps or uncertainties
 
-Write findings to a file named `findings/NN-topic.md` for each subtask (e.g., `findings/01-market-size.md`).
+Write findings to `research/<slug>/findings/NN-topic.md` for each subtask (e.g., `research/<slug>/findings/01-market-size.md`).
 
 ### Step 2.3: Iterate on Findings
 
@@ -154,7 +173,7 @@ After each subtask's initial search:
 1. Review what was found
 2. Identify gaps or surprising findings
 3. Generate follow-up queries if needed
-4. Document follow-up searches as `findings/NN-topic-followup.md`
+4. Document follow-up searches as `research/<slug>/findings/NN-topic-followup.md`
 
 **Never stop at the first round of results.** A thorough investigation requires at least 2-3 rounds of iterative searching per subtopic, each with progressively refined queries.
 
@@ -183,7 +202,7 @@ Synthesize all findings into a coherent narrative.
 
 ### Step 3.1: Map Evidence to Claims
 
-Create a mapping file `findings/evidence-map.md`:
+Create a mapping file `research/<slug>/findings/evidence-map.md`:
 ```markdown
 # Evidence Map
 
@@ -205,7 +224,7 @@ List what could not be found and why:
 - Areas requiring specialized knowledge or access
 - Temporal limitations (outdated data, future predictions)
 
-Write to `findings/gaps.md`:
+Write to `research/<slug>/findings/gaps.md`:
 ```markdown
 # Research Gaps
 
@@ -230,7 +249,7 @@ Produce the final report with full citations.
 
 ### Report Format
 
-Write to `research-report.md`:
+Write to `research/<slug>/report.md`:
 
 ```markdown
 # <Title>
