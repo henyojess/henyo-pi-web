@@ -14,7 +14,7 @@ import * as os from 'node:os';
 //
 // The factory call has side effects (loadConfig, rateLimitStore.clearExpired,
 // cache writes) — so the extension runs under a TEMP HOME with its own
-// settings.json (`henyo-search.trace: true`). This keeps the real
+// settings.json (`henyo-web.search.trace: true`). This keeps the real
 // ~/.pi/tools-cache/henyo_search/rate-limit.json and the real henyo_fetch
 // cache untouched (the Step 5 md5-stability gate), and makes the test
 // self-contained instead of depending on the real user settings.
@@ -95,7 +95,7 @@ describe.skipIf(!piDir)('henyo_fetch trace logging (jiti-loaded extension)', () 
     fs.mkdirSync(settingsDir, { recursive: true });
     fs.writeFileSync(
       join(settingsDir, 'settings.json'),
-      JSON.stringify({ 'henyo-search': { trace: true } }),
+      JSON.stringify({ 'henyo-web': { search: { trace: true } } }),
       'utf8',
     );
 

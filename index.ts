@@ -33,7 +33,7 @@ import { WEB_TOOL_NAMES, hideWebTools, activateWebTools } from "./shared/web-too
 function getCacheDir(subdir: string): string {
   const home = process.env.HOME || process.env.USERPROFILE;
   if (!process.env.HOME && process.env.USERPROFILE) {
-    console.warn('[henyo-search] HOME is undefined, using USERPROFILE for cache path');
+    console.warn('[henyo-web] HOME is undefined, using USERPROFILE for cache path');
   }
   return `${home}/.pi/tools-cache/${subdir}`;
 }
@@ -94,7 +94,7 @@ export default function (pi: ExtensionAPI) {
         description: "Skip cache",
       })),
     }),
-    execute: createSearchExecute(searchDuckDuckGo, "search_ddg", false, config['henyo-search']),
+    execute: createSearchExecute(searchDuckDuckGo, "search_ddg", false, config['henyo-web'].search),
     renderCall(args, theme) {
       return new Text(theme.fg("toolTitle", "search_ddg ") + theme.fg("muted", `"${args.query}"`), 0, 0);
     },
@@ -136,7 +136,7 @@ export default function (pi: ExtensionAPI) {
       })),
     }),
     // Wikipedia sanitizes internally (strips HTML, limits extract length), so outer sanitization is redundant
-    execute: createSearchExecute(searchWikipedia, "search_wikipedia", false, config['henyo-search']),
+    execute: createSearchExecute(searchWikipedia, "search_wikipedia", false, config['henyo-web'].search),
     renderCall(args, theme) {
       return new Text(theme.fg("toolTitle", "search_wikipedia ") + theme.fg("muted", `"${args.query}"`), 0, 0);
     },
@@ -177,7 +177,7 @@ export default function (pi: ExtensionAPI) {
         description: "Skip cache",
       })),
     }),
-    execute: createSearchExecute(searchStackOverflow, "search_stackoverflow", false, config['henyo-search']),
+    execute: createSearchExecute(searchStackOverflow, "search_stackoverflow", false, config['henyo-web'].search),
     renderCall(args, theme) {
       return new Text(theme.fg("toolTitle", "search_stackoverflow ") + theme.fg("muted", `"${args.query}"`), 0, 0);
     },
@@ -218,7 +218,7 @@ export default function (pi: ExtensionAPI) {
         description: "Skip cache",
       })),
     }),
-    execute: createSearchExecute(searchNpm, "search_npm", true, config['henyo-search']),
+    execute: createSearchExecute(searchNpm, "search_npm", true, config['henyo-web'].search),
     renderCall(args, theme) {
       return new Text(theme.fg("toolTitle", "search_npm ") + theme.fg("muted", `"${args.query}"`), 0, 0);
     },
@@ -259,7 +259,7 @@ export default function (pi: ExtensionAPI) {
         description: "Skip cache",
       })),
     }),
-    execute: createSearchExecute(searchGitHub, "search_github", false, config['henyo-search']),
+    execute: createSearchExecute(searchGitHub, "search_github", false, config['henyo-web'].search),
     renderCall(args, theme) {
       return new Text(theme.fg("toolTitle", "search_github ") + theme.fg("muted", `"${args.query}"`), 0, 0);
     },
@@ -306,8 +306,8 @@ export default function (pi: ExtensionAPI) {
     async execute(toolCallId, params, signal, onUpdate, _ctx) {
       const { url, timeout = 15000, noCache = false, headers } = params;
       log('execute: toolCallId=' + toolCallId + ' url=' + url);
-      // Wire trace config (mirror of execute.ts) — henyo-search.trace gates fetch too
-      (globalThis as any).__henyoTraceConfig = config['henyo-search']?.trace ?? false;
+      // Wire trace config (mirror of execute.ts) — henyo-web.search.trace gates fetch too
+      (globalThis as any).__henyoTraceConfig = config['henyo-web'].search.trace ?? false;
       const startTime = Date.now();
 
       // 100ms delay so TUI can properly update
@@ -318,7 +318,7 @@ export default function (pi: ExtensionAPI) {
           url,
           timeout,
           noCache,
-          config: config["henyo-fetch"],
+          config: config["henyo-web"].fetch,
           signal,
           onUpdate: undefined,
           headers,

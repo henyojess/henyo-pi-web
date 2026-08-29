@@ -22,11 +22,11 @@ describe('loadConfig', () => {
     const { loadConfig: freshLoad } = await import('../shared/config.ts');
     const config = freshLoad();
 
-    expect(config['henyo-fetch'].jinaEnabled).toBe(true);
-    expect(config['henyo-fetch'].waybackEnabled).toBe(true);
-    expect(config['henyo-fetch']['min-delay']).toBe(1000);
-    expect(config['henyo-fetch']['max-delay']).toBe(3000);
-    expect(config['henyo-search']).toEqual({});
+    expect(config['henyo-web'].fetch.jinaEnabled).toBe(true);
+    expect(config['henyo-web'].fetch.waybackEnabled).toBe(true);
+    expect(config['henyo-web'].fetch['min-delay']).toBe(1000);
+    expect(config['henyo-web'].fetch['max-delay']).toBe(3000);
+    expect(config['henyo-web'].search).toEqual({});
 
     fs.existsSync = origExistsSync;
   });
@@ -36,12 +36,14 @@ describe('loadConfig', () => {
     const origReadFileSync = fs.readFileSync;
 
     const customSettings = {
-      'henyo-fetch': {
-        'min-delay': 500,
-        jinaEnabled: false,
-      },
-      'henyo-search': {
-        trace: ['duckduckgo'],
+      'henyo-web': {
+        fetch: {
+          'min-delay': 500,
+          jinaEnabled: false,
+        },
+        search: {
+          trace: ['duckduckgo'],
+        },
       },
     };
 
@@ -59,13 +61,13 @@ describe('loadConfig', () => {
     const config = freshLoad();
 
     // User overrides
-    expect(config['henyo-fetch']['min-delay']).toBe(500);
-    expect(config['henyo-fetch'].jinaEnabled).toBe(false);
-    expect(config['henyo-search'].trace).toEqual(['duckduckgo']);
+    expect(config['henyo-web'].fetch['min-delay']).toBe(500);
+    expect(config['henyo-web'].fetch.jinaEnabled).toBe(false);
+    expect(config['henyo-web'].search.trace).toEqual(['duckduckgo']);
 
     // Preserved defaults
-    expect(config['henyo-fetch']['max-delay']).toBe(3000);
-    expect(config['henyo-fetch']['cache-max-files']).toBe(100);
+    expect(config['henyo-web'].fetch['max-delay']).toBe(3000);
+    expect(config['henyo-web'].fetch['cache-max-files']).toBe(100);
 
     fs.existsSync = origExistsSync;
     fs.readFileSync = origReadFileSync;
@@ -88,8 +90,8 @@ describe('loadConfig', () => {
     const { loadConfig: freshLoad } = await import('../shared/config.ts');
     const config = freshLoad();
 
-    expect(config['henyo-fetch'].jinaEnabled).toBe(true);
-    expect(config['henyo-fetch']['min-delay']).toBe(1000);
+    expect(config['henyo-web'].fetch.jinaEnabled).toBe(true);
+    expect(config['henyo-web'].fetch['min-delay']).toBe(1000);
 
     fs.existsSync = origExistsSync;
     fs.readFileSync = origReadFileSync;
@@ -115,8 +117,10 @@ describe('loadConfig', () => {
     const origReadFileSync = fs.readFileSync;
 
     const customSettings = {
-      'henyo-search': {
-        providers: { stackoverflow: { 'api-key': 'my-secret-key' } },
+      'henyo-web': {
+        search: {
+          providers: { stackoverflow: { 'api-key': 'my-secret-key' } },
+        },
       },
     };
 
@@ -133,7 +137,46 @@ describe('loadConfig', () => {
     const { loadConfig: freshLoad } = await import('../shared/config.ts');
     const config = freshLoad();
 
-    expect(config['henyo-search'].providers?.stackoverflow?.['api-key']).toBe('my-secret-key');
+    expect(config['henyo-web'].search.providers?.stackoverflow?.['api-key']).toBe('my-secret-key');
+
+    fs.existsSync = origExistsSync;
+    fs.readFileSync = origReadFileSync;
+  });
+
+  it('keeps all fetch defaults when the user file sets only henyo-web.search (deepMerge nesting)', async () => {
+    const origExistsSync = fs.existsSync;
+    const origReadFileSync = fs.readFileSync;
+
+    const customSettings = {
+      'henyo-web': { search: { trace: true } },
+    };
+
+    fs.existsSync = vi.fn((p: string) => {
+      if (p === settingsPath) return true;
+      return origExistsSync(p);
+    });
+
+    fs.readFileSync = vi.fn((p: string, enc: string) => {
+      if (p === settingsPath) return JSON.stringify(customSettings);
+      return origReadFileSync(p, enc);
+    });
+
+    const { loadConfig: freshLoad } = await import('../shared/config.ts');
+    const config = freshLoad();
+
+    expect(config['henyo-web'].search.trace).toBe(true);
+    // Absent fetch sub-block → all fetch defaults survive the added nesting level
+    expect(config['henyo-web'].fetch).toEqual({
+      jinaEnabled: true,
+      waybackEnabled: true,
+      'min-delay': 1000,
+      'max-delay': 3000,
+      'cache-max-files': 100,
+      'heading-threshold': 40000,
+      'content-threshold': 32000,
+      'jina-timeout': 30000,
+      'max-response-size': 10485760,
+    });
 
     fs.existsSync = origExistsSync;
     fs.readFileSync = origReadFileSync;
@@ -144,8 +187,10 @@ describe('loadConfig', () => {
     const origReadFileSync = fs.readFileSync;
 
     const customSettings = {
-      'henyo-search': {
-        providers: { stackoverflow: { 'api-key': 'x' } },
+      'henyo-web': {
+        search: {
+          providers: { stackoverflow: { 'api-key': 'x' } },
+        },
       },
     };
 
@@ -162,7 +207,7 @@ describe('loadConfig', () => {
     const { loadConfig: freshLoad } = await import('../shared/config.ts');
     const config = freshLoad();
 
-    expect(config['henyo-search'].providers?.stackoverflow?.['api-key']).toBe('x');
+    expect(config['henyo-web'].search.providers?.stackoverflow?.['api-key']).toBe('x');
 
     fs.existsSync = origExistsSync;
     fs.readFileSync = origReadFileSync;
@@ -172,17 +217,19 @@ describe('loadConfig', () => {
 describe('validateConfig', () => {
   it('accepts a fully-populated settings object without throwing', () => {
     const config: Settings = {
-      'henyo-search': {
-        trace: true,
-        providers: { stackoverflow: { 'api-key': 'x' } },
+      'henyo-web': {
+        search: {
+          trace: true,
+          providers: { stackoverflow: { 'api-key': 'x' } },
+        },
+        fetch: { jinaEnabled: true, 'max-response-size': 1_048_576 },
       },
-      'henyo-fetch': { jinaEnabled: true, 'max-response-size': 1_048_576 },
     };
     expect(() => validateConfig(config)).not.toThrow();
   });
 
   it('runs both section validators on an empty config (no-op hooks today)', () => {
     // validators are currently no-op hooks: even a junk shape does not throw
-    expect(() => validateConfig({ 'henyo-search': {}, 'henyo-fetch': {} } as Settings)).not.toThrow();
+    expect(() => validateConfig({ 'henyo-web': { search: {}, fetch: {} } } as Settings)).not.toThrow();
   });
 });

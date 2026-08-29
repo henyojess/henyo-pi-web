@@ -8,7 +8,7 @@ import * as path from 'node:path';
  * - Fetch: henyo_fetch tool layer (cache, SSRF/size blocks, extraction, errors).
  *
  * Gating via `globalThis.__henyoTraceConfig` (set by execute.ts / index.ts
- * from the `henyo-search.trace` setting):
+ * from the `henyo-web.search.trace` setting):
  * - `true`: trace all providers
  * - `string[]`: trace only specified provider names
  * - `undefined` or `false`: no trace logging
