@@ -99,6 +99,16 @@ describe('traceEnd', () => {
     delete (globalThis as Record<string, unknown>).__henyoTraceConfig;
   });
 
+  it('falls back to results=0 when the entry has no resultCount', () => {
+    // `entry.resultCount ?? 0` right side (L134)
+    (globalThis as Record<string, unknown>).__henyoTraceConfig = true;
+    const start = Date.now() - 10;
+    traceEnd('search_ddg', 'q', start, { status: 'ok' });
+    const line = readTraceLog().trim();
+    expect(line).toContain('results=0');
+    expect(line).toContain('status="ok"');
+  });
+
   it('respects gating: writes nothing when config is false, a line (with computed duration) when true', () => {
     (globalThis as Record<string, unknown>).__henyoTraceConfig = false;
     traceEnd('search_ddg', 'q', Date.now() - 10, { status: 'ok', resultCount: 3 });
