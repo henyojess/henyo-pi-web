@@ -185,4 +185,24 @@ describe('fetchWithRetry', () => {
     expect(captured?.['User-Agent']).toBeDefined();
     expect(USER_AGENTS).toContain(captured?.['User-Agent']);
   });
+
+  it('aborts a hanging fetch on timeout and exhausts retries', async () => {
+    let callCount = 0;
+    vi.spyOn(global, 'fetch').mockImplementation((_url, init) => {
+      callCount++;
+      const signal = (init as RequestInit).signal!;
+      // Never resolves on its own; rejects only when the timeout aborts the signal
+      return new Promise<Response>((_, reject) => {
+        signal.addEventListener(
+          'abort',
+          () => reject(new DOMException('Aborted', 'AbortError')),
+          { once: true }
+        );
+      });
+    });
+    // 50ms timeout × 4 attempts ≈ 200ms real time; delay() is mocked instant
+    await expect(fetchWithRetry('https://example.com', 50)).rejects.toThrow('Aborted');
+    // 4 attempts: each hung fetch was cut off by the setTimeout abort callback
+    expect(callCount).toBe(4);
+  });
 });
