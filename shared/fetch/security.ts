@@ -65,11 +65,9 @@ export function isSafeUrl(url: string): boolean {
   // Check if hostname is an IP address
   if (/^\d+\.\d+\.\d+\.\d+$/.test(hostname)) {
     const ipNum = ipToNumber(hostname);
-    if (ipNum !== null) {
-      for (const network of BLOCKED_NETWORKS) {
-        if (network.contains(ipNum)) {
-          return false;
-        }
+    for (const network of BLOCKED_NETWORKS) {
+      if (network.contains(ipNum)) {
+        return false;
       }
     }
   }
@@ -83,15 +81,16 @@ export function isSafeUrl(url: string): boolean {
 
 /**
  * Convert an IPv4 address string to a 32-bit number.
+ * Input is guaranteed to be a valid IPv4: `isSafeUrl` only calls this when the
+ * hostname matches /^\d+\.\d+\.\d+\.\d+$/, and `new URL()` throws
+ * (ERR_INVALID_URL) on dotted-quad hostnames with invalid octets, so every
+ * string reaching here is a well-formed 4-group IPv4.
  */
-function ipToNumber(ip: string): number | null {
+function ipToNumber(ip: string): number {
   const parts = ip.split('.');
-  if (parts.length !== 4) return null;
-
   let num = 0;
   for (const part of parts) {
     const n = parseInt(part, 10);
-    if (isNaN(n) || n < 0 || n > 255) return null;
     num = (num << 8) + n;
   }
 

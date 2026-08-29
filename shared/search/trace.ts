@@ -78,7 +78,7 @@ function rotateLog(): void {
     const stats = fs.statSync(logPath);
     if (stats.size < DEFAULT_MAX_LOG_SIZE) return;
 
-    // Rotate: .1 -> .2 -> .3, delete .3 if exists
+    // Rotate: .1 -> .2 -> .3 (oldest backup is overwritten)
     for (let i = DEFAULT_MAX_BACKUPS; i >= 1; i--) {
       const dst = `${logPath}.${i}`;
 
@@ -93,11 +93,6 @@ function rotateLog(): void {
         if (fs.existsSync(prev)) {
           fs.renameSync(prev, dst);
         }
-      }
-
-      // Delete oldest if beyond max backups
-      if (i > DEFAULT_MAX_BACKUPS && fs.existsSync(dst)) {
-        fs.unlinkSync(dst);
       }
     }
   } catch {

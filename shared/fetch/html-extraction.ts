@@ -83,9 +83,5 @@ export async function extractHtmlContent(
     }
   }
 
-  if (!result) {
-    result = { bodyText: html, title: '', source: 'raw' };
-  }
-
   return result;
 }

@@ -30,9 +30,11 @@ export function createCache<T>(dir: string, ttlSeconds: number, maxFiles?: numbe
   function evictIfNecessary() {
     if (maxFiles === undefined) return;
     const files = listFiles();
-    while (files.length >= maxFiles) {
-      const oldest = files.shift();
-      if (oldest) fs.unlinkSync(oldest.path);
+    // Guard: maxFiles = 0 means "cache nothing" — without it the loop never
+    // terminates (files.length is always >= 0).
+    while (maxFiles > 0 && files.length >= maxFiles) {
+      // Inside the loop files.length >= maxFiles > 0, so shift() is defined.
+      fs.unlinkSync(files.shift()!.path);
     }
   }
 

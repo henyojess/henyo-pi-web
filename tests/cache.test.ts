@@ -166,6 +166,44 @@ describe('createCache', () => {
       // No maxFiles → eviction skipped
       expect(mockFs.unlinkSync).not.toHaveBeenCalled();
     });
+
+    it('is a no-op when maxFiles is 0 (regression: guard short-circuits, no infinite loop)', () => {
+      vi.mocked(mockFs.unlinkSync).mockReset();
+      vi.mocked(mockFs.existsSync).mockReturnValue(true);
+      vi.mocked(mockFs.readdirSync).mockReturnValue([
+        'aaa.json',
+        'bbb.json',
+      ]);
+      vi.mocked(mockFs.statSync).mockImplementation(() => ({
+        mtimeMs: 1000,
+      }));
+
+      const cache = createCache(dir, 300, 0);
+      cache.put('key1', { value: 'data1' });
+
+      // maxFiles = 0 → `maxFiles > 0` guard is false → loop body never runs,
+      // eviction is a no-op and put() completes (before the guard this looped forever)
+      expect(mockFs.unlinkSync).not.toHaveBeenCalled();
+      expect(mockFs.writeFileSync).toHaveBeenCalledTimes(1);
+    });
+
+    it('evicts the oldest when at capacity with maxFiles 1 (guard true side)', () => {
+      vi.mocked(mockFs.unlinkSync).mockReset();
+      vi.mocked(mockFs.existsSync).mockReturnValue(true);
+      vi.mocked(mockFs.readdirSync).mockReturnValue([
+        'aaa.json',
+      ]);
+      vi.mocked(mockFs.statSync).mockImplementation(() => ({
+        mtimeMs: 1000,
+      }));
+
+      const cache = createCache(dir, 300, 1);
+      cache.put('key1', { value: 'data1' });
+
+      // 1 file >= maxFiles 1 → evict the oldest, then 0 >= 1 stops the loop
+      expect(mockFs.unlinkSync).toHaveBeenCalledTimes(1);
+      expect(mockFs.unlinkSync).toHaveBeenCalledWith(`${dir}/aaa.json`);
+    });
   });
 
   describe('evict', () => {
