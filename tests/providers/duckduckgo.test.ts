@@ -1,5 +1,8 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import * as fs from 'node:fs';
+import { join } from 'node:path';
+import { mkdtempSync } from 'node:fs';
+import { tmpdir } from 'node:os';
 import { searchDuckDuckGo } from '../../shared/search/providers';
 
 vi.mock('../../shared/user-agents', async (importOriginal) => {
@@ -362,5 +365,176 @@ describe('searchDuckDuckGo — abort signal & trace', () => {
     const content = fs.readFileSync('/tmp/henyo-trace.log', 'utf-8');
     expect(content).toContain('status="error"');
     expect(content).toContain('error="captcha"');
+  });
+});
+
+describe('searchDuckDuckGo — parse fallbacks + internal timeout', () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  const ddgResponse = (html: string) =>
+    new Response(html, { status: 200, headers: { 'Content-Type': 'text/html' } });
+
+  it('falls back to result__url when /l/? path has no uddg= segment', async () => {
+    const html = `
+      <html><body>
+      <div class="result">
+        <a class="result__a" href="/l/?rut=abc">Path Fallback</a>
+        <a class="result__url">https://path-fallback.example/doc</a>
+        <a class="result__snippet">Snippet</a>
+      </div>
+      </div>
+      </div>
+      </body></html>
+    `;
+    vi.spyOn(global, 'fetch').mockImplementation(async () => ddgResponse(html));
+    const results = await searchDuckDuckGo('test');
+    // /l/? matches but contains no uddg= → pathMatch extraction collapses to ''
+    // → actualUrl falls back to the result__url text
+    expect(results[0].url).toBe('https://path-fallback.example/doc');
+  });
+
+  it('emits an Untitled result when the div has no result__a at all', async () => {
+    const html = `
+      <html><body>
+      <div class="result">
+        <a class="result__url">https://no-anchor.example/x</a>
+        <a class="result__snippet">Only a URL</a>
+      </div>
+      </div>
+      </div>
+      </body></html>
+    `;
+    vi.spyOn(global, 'fetch').mockImplementation(async () => ddgResponse(html));
+    const results = await searchDuckDuckGo('test');
+    expect(results).toHaveLength(1);
+    expect(results[0].title).toBe('Untitled');
+    expect(results[0].url).toBe('https://no-anchor.example/x');
+  });
+
+  it('skips the result entirely when neither title nor URL can be extracted', async () => {
+    const html = `
+      <html><body>
+      <div class="result">
+        <span>unrelated markup only</span>
+      </div>
+      </div>
+      </div>
+      </body></html>
+    `;
+    vi.spyOn(global, 'fetch').mockImplementation(async () => ddgResponse(html));
+    const results = await searchDuckDuckGo('test');
+    expect(results).toEqual([]);
+  });
+
+  it('pushes an empty url when the href is only whitespace', async () => {
+    const html = `
+      <html><body>
+      <div class="result">
+        <a class="result__a" href="   ">Spaced</a>
+        <a class="result__snippet">Snippet</a>
+      </div>
+      </div>
+      </div>
+      </body></html>
+    `;
+    vi.spyOn(global, 'fetch').mockImplementation(async () => ddgResponse(html));
+    const results = await searchDuckDuckGo('test');
+    expect(results[0].title).toBe('Spaced');
+    // title present, redirectUrl trims to '' and no result__url → url collapses to ''
+    expect(results[0].url).toBe('');
+  });
+
+  it('does not unshift a Direct Answer when the abstract text collapses to empty', async () => {
+    const html = `
+      <html><body>
+      <div class="result">
+        <a class="result__a" href="uddg=https://example.com/normal">Normal</a>
+        <a class="result__snippet">Snippet</a>
+      </div>
+      </div>
+      </div>
+      <a class="abstract">   <b>  </b>  </a>
+      </body></html>
+    `;
+    vi.spyOn(global, 'fetch').mockImplementation(async () => ddgResponse(html));
+    const results = await searchDuckDuckGo('test');
+    expect(results).toHaveLength(1);
+    expect(results[0].title).toBe('Normal');
+  });
+
+  it('rethrows No endpoint succeeded when both endpoints return non-429 errors', async () => {
+    vi.spyOn(global, 'fetch').mockImplementation(async (url: string) => {
+      if (String(url).includes('html.duckduckgo.com')) return new Response('e1', { status: 500 });
+      return new Response('e2', { status: 503 });
+    });
+    await expect(searchDuckDuckGo('test')).rejects.toThrow('No endpoint succeeded');
+  });
+
+  it('keeps looping endpoints when a 200 response has an empty body', async () => {
+    vi.spyOn(global, 'fetch').mockImplementation(async (url: string) => {
+      if (String(url).includes('html.duckduckgo.com')) {
+        return new Response('', { status: 200, headers: { 'Content-Type': 'text/html' } });
+      }
+      return new Response('e2', { status: 500 });
+    });
+    await expect(searchDuckDuckGo('test')).rejects.toThrow('No endpoint succeeded');
+  });
+
+  it('traces a non-Error rejection via String(err)', async () => {
+    const LOG = join(mkdtempSync(join(tmpdir(), 'henyo-ddg-')), 'trace.log');
+    (globalThis as Record<string, unknown>).__henyoTraceLogPath = LOG;
+    (globalThis as Record<string, unknown>).__henyoTraceConfig = ['duckduckgo'];
+    try {
+      vi.spyOn(global, 'fetch').mockImplementation(async () => {
+        throw 'fetch string failure';
+      });
+      await expect(searchDuckDuckGo('test')).rejects.toEqual('fetch string failure');
+      const log = fs.readFileSync(LOG, 'utf-8');
+      expect(log).toContain('error="fetch string failure"');
+    } finally {
+      try { fs.unlinkSync(LOG); } catch { /* no log — fine */ }
+      delete (globalThis as Record<string, unknown>).__henyoTraceConfig;
+      delete (globalThis as Record<string, unknown>).__henyoTraceLogPath;
+    }
+  });
+
+  it('aborts internally after 15 s (fake timers) when the endpoint hangs', async () => {
+    vi.useFakeTimers();
+    try {
+      vi.spyOn(global, 'fetch').mockImplementation((_url: string, init?: { signal?: AbortSignal }) => {
+        const sig = init?.signal;
+        return new Promise<Response>((_resolve, reject) => {
+          if (!sig || sig.aborted) {
+            reject(new Error('AbortError'));
+            return;
+          }
+          sig.addEventListener('abort', () => reject(new Error('AbortError')), { once: true });
+        });
+      });
+      // Settle the rejection immediately (handler attached before the
+      // advanceTimers calls) — otherwise the rejection lands mid-advance
+      // with no handler yet and is reported as an unhandled rejection.
+      const p = searchDuckDuckGo('slow query');
+      const settled = (async () => {
+        try {
+          await p;
+          return null;
+        } catch (e: unknown) {
+          return e;
+        }
+      })();
+      // attempt 1 hangs until the 15 s internal timer fires and aborts the
+      // controller; attempts 2–3 then reject immediately (already aborted)
+      // and the mocked delay resolves instantly
+      await vi.advanceTimersByTimeAsync(15_000);
+      await vi.advanceTimersByTimeAsync(0);
+      const err = await settled;
+      expect(err).toBeInstanceOf(Error);
+      expect((err as Error).message).toBe('AbortError');
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });
