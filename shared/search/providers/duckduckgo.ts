@@ -32,7 +32,7 @@ export async function searchDuckDuckGo(query: string, signal?: AbortSignal): Pro
       },
     };
 
-    let html: string | null = null;
+    let html: string;
     try {
       html = await withRetry(async () => {
         for (const base of endpoints) {
@@ -69,8 +69,6 @@ export async function searchDuckDuckGo(query: string, signal?: AbortSignal): Pro
       // surface as provider errors in execute.ts.
       throw err;
     }
-
-    if (!html) return [];
 
     const bodyMatch = html.match(/<body[^>]*>([\s\S]*)<\/body>/i);
     if (!bodyMatch) return [];

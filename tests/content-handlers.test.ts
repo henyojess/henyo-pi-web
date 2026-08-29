@@ -245,6 +245,23 @@ describe('handleContent — PDF', () => {
     expect(result!.cacheFilePath).toMatch(/\.json$/);
     expect(cache.put).toHaveBeenCalledTimes(1);
   });
+
+  it('does not cache oversized PDF extraction when noCache is set', async () => {
+    const cache = makeCache();
+    const result = await handleContent(
+      options({
+        body: 'ignored',
+        rawBytes: createMinimalPdf('Hello PDF'),
+        contentType: 'application/pdf',
+        contentThreshold: 5,
+        noCache: true,
+        cache,
+      }),
+    );
+    expect(result!.source).toBe('pdf');
+    expect(result!.oversized).toBe(true);
+    expect(cache.put).not.toHaveBeenCalled();
+  });
 });
 
 describe('handleContent — binary types', () => {
@@ -272,6 +289,15 @@ describe('handleContent — binary types', () => {
     );
     expect(result!.source).toBe('binary');
     expect(result!.text).toBe('This is a binary file. Content cannot be displayed as text.');
+  });
+
+  it('does not cache the binary result when noCache is set', async () => {
+    const cache = makeCache();
+    const result = await handleContent(
+      options({ body: 'x'.repeat(16), contentType: 'application/zip', noCache: true, cache }),
+    );
+    expect(result!.source).toBe('zip');
+    expect(cache.put).not.toHaveBeenCalled();
   });
 });
 
