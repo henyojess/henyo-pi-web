@@ -1,4 +1,4 @@
-import { fetchPage, formatSize } from '../shared/fetch/pipeline';
+import { fetchPage, formatSize, makeResult } from '../shared/fetch/pipeline';
 import type { WebFetchConfig } from '../shared/config';
 
 // Mock extract and github modules to avoid real network calls
@@ -12,7 +12,14 @@ vi.mock('../shared/fetch/github', () => ({
   fetchGitHubContent: vi.fn(),
 }));
 
+// delay → instant so the config-defaults test (min-delay default 1000) does not wait
+vi.mock('../shared/user-agents', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../shared/user-agents')>();
+  return { ...actual, delay: () => Promise.resolve() };
+});
+
 import { extractWithDefuddle, fetchWithJina } from '../shared/fetch/extract';
+import { isGitHubUrl, fetchGitHubContent } from '../shared/fetch/github';
 
 describe('fetchPage', () => {
   const config: WebFetchConfig = {
@@ -595,6 +602,185 @@ describe('fetchPage', () => {
     expect(result.originalUrl).toBeUndefined();
     expect(result.snapshotDate).toBeUndefined();
     expect(result.text).not.toContain('Archived snapshot');
+  });
+
+  // ─── Config defaults ────────────────────────────────────────────────────
+
+  it('applies all config defaults when config is empty', async () => {
+    mockHtmlFetch();
+    (extractWithDefuddle as any).mockResolvedValue(defuddleOk('Defaults Title'));
+    const result = await fetchPage({ url: 'https://example.com/defaults', timeout: 10000, noCache: true, config: {} });
+    expect(result.title).toBe('Defaults Title');
+    expect(result.text).toContain('This content is long enough');
+  });
+
+  // ─── Missing Content-Type (|| '' fallback) ───────────────────────────────
+
+  it('falls back to HTML extraction when the response has no Content-Type header', async () => {
+    // Hand-rolled response: every header lookup is null, no body reader → res.text()
+    vi.stubGlobal('fetch', async () => {
+      return {
+        ok: true,
+        url: 'https://example.com/no-ct',
+        headers: { get: () => null },
+        body: null,
+        text: async () => mockHtml,
+      } as unknown as Response;
+    });
+    (extractWithDefuddle as any).mockResolvedValue(defuddleOk('No CT'));
+    const result = await fetchPage({ url: 'https://example.com/no-ct', timeout: 10000, noCache: true, config });
+    expect(result.source).toBe('defuddle');
+    expect(result.text).toContain('This content is long enough');
+  });
+
+  // ─── Wayback without a recognizable snapshot date ───────────────────────
+
+  it('wayback fallback without a 14-digit timestamp uses "unknown date"', async () => {
+    const directUrl = 'https://example.com/no-date';
+    vi.stubGlobal('fetch', async (url: string) => {
+      if (url.startsWith('https://web.archive.org/web/')) {
+        const res = new Response(mockHtml, {
+          status: 200,
+          headers: { 'Content-Type': 'text/html; charset=utf-8' },
+        });
+        Object.defineProperty(res, 'url', {
+          value: 'https://web.archive.org/web/https://example.com/no-date', // no timestamp
+          configurable: true,
+        });
+        return res;
+      }
+      return new Response('Forbidden', { status: 403 });
+    });
+    (extractWithDefuddle as any).mockResolvedValue(defuddleOk('Archived Page'));
+    const result = await fetchPage({ url: directUrl, timeout: 10000, noCache: true, config });
+    expect(result.source).toBe('wayback');
+    expect(result.originalUrl).toBe(directUrl);
+    expect(result.snapshotDate).toBeUndefined();
+    expect(result.text.startsWith('⚠ Archived snapshot from unknown date')).toBe(true);
+  });
+
+  // ─── Empty source fallback (|| 'defuddle') ──────────────────────────────
+
+  it('falls back to "defuddle" when the github extraction result has an empty source', async () => {
+    // Contractually valid: fetchGitHubContent returns { title, bodyText, source: string }
+    (isGitHubUrl as any).mockReturnValue(true);
+    (fetchGitHubContent as any).mockResolvedValue({
+      title: 'GitHub File',
+      bodyText: 'GitHub file content that is long enough to pass the quality threshold for the pipeline.',
+      source: '',
+    });
+    mockHtmlFetch(); // fetch is not actually called (github path short-circuits)
+    const result = await fetchPage({
+      url: 'https://github.com/o/r/blob/main/f.txt',
+      timeout: 10000,
+      noCache: true,
+      config,
+    });
+    expect(result.source).toBe('defuddle');
+    expect(result.title).toBe('GitHub File');
+  });
+
+  // ─── Empty title (unparseable resolved URL) ─────────────────────────────
+
+  it('keeps an empty title when the resolved URL cannot be parsed', async () => {
+    (isGitHubUrl as any).mockReturnValue(false);
+    vi.stubGlobal('fetch', async () => {
+      const res = new Response(mockHtml, {
+        status: 200,
+        headers: { 'Content-Type': 'text/html; charset=utf-8' },
+      });
+      Object.defineProperty(res, 'url', { value: 'invalid-url', configurable: true });
+      return res;
+    });
+    (extractWithDefuddle as any).mockResolvedValue(defuddleOk(''));
+    (fetchWithJina as any).mockRejectedValue(new Error('jina unused in this test'));
+    const result = await fetchPage({ url: 'https://example.com/empty-title', timeout: 10000, noCache: true, config });
+    expect(result.title).toBe('');
+  });
+
+  it('keeps an empty title on oversized results when the resolved URL cannot be parsed', async () => {
+    (isGitHubUrl as any).mockReturnValue(false);
+    vi.stubGlobal('fetch', async () => {
+      const res = new Response(mockHtml, {
+        status: 200,
+        headers: { 'Content-Type': 'text/html; charset=utf-8' },
+      });
+      Object.defineProperty(res, 'url', { value: 'invalid-url', configurable: true });
+      return res;
+    });
+    (extractWithDefuddle as any).mockResolvedValue(defuddleOk(''));
+    (fetchWithJina as any).mockRejectedValue(new Error('jina unused in this test'));
+    const result = await fetchPage({
+      url: 'https://example.com/oversized-empty-title',
+      timeout: 10000,
+      noCache: true,
+      config: { ...config, 'content-threshold': 100 },
+    });
+    expect(result.title).toBe('');
+    expect(result.oversized).toBe(true);
+  });
+
+  // ─── Size-exceeded with noCache (cache put skipped) ─────────────────────
+
+  it('size-exceeded via Content-Length header with noCache skips the cache', async () => {
+    vi.stubGlobal('fetch', async () => {
+      const res = new Response('small', { status: 200, headers: { 'Content-Length': '5000' } });
+      Object.defineProperty(res, 'url', { value: 'https://example.com/big', configurable: true });
+      return res;
+    });
+    const result = await fetchPage({
+      url: 'https://example.com/big',
+      timeout: 10000,
+      noCache: true,
+      config: { ...config, 'max-response-size': 1000 },
+    });
+    expect(result.source).toBe('size-exceeded');
+    expect(result.text).toContain('exceeded max-response-size');
+  });
+
+  it('size-exceeded via streamed body with noCache skips the cache', async () => {
+    const largeHtml = '<html><body>' + 'x'.repeat(5000) + '</body></html>';
+    vi.stubGlobal('fetch', async () => {
+      const res = new Response(largeHtml, {
+        status: 200,
+        headers: { 'Content-Type': 'text/html' },
+      });
+      Object.defineProperty(res, 'url', { value: 'https://example.com/stream-big', configurable: true });
+      return res;
+    });
+    const result = await fetchPage({
+      url: 'https://example.com/stream-big',
+      timeout: 10000,
+      noCache: true,
+      config: { ...config, 'max-response-size': 1000 },
+    });
+    expect(result.source).toBe('size-exceeded');
+    expect(result.text).toContain('exceeded max-response-size');
+  });
+});
+
+describe('makeResult', () => {
+  it('omits size metadata when contentLength is undefined', () => {
+    const r = makeResult(
+      { resolvedUrl: 'https://example.com/', source: 'defuddle', truncated: false },
+      'some text',
+      'Some Title',
+    );
+    expect(r.text).toBe('some text');
+    expect(r.title).toBe('Some Title');
+    expect(r.contentLengthKB).toBeUndefined();
+    expect(r.sizeLabel).toBeUndefined();
+  });
+
+  it('includes size metadata when contentLength is provided', () => {
+    const r = makeResult(
+      { resolvedUrl: 'https://example.com/', source: 'defuddle', truncated: false },
+      'x'.repeat(2048),
+      'T',
+      2048,
+    );
+    expect(r.sizeLabel).toBe('2 KB');
+    expect(r.contentLengthKB).toBe(2);
   });
 });
 
