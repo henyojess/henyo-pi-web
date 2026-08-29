@@ -20,6 +20,9 @@ vi.mock('../shared/user-agents', async (importOriginal) => {
 
 import { extractWithDefuddle, fetchWithJina } from '../shared/fetch/extract';
 import { isGitHubUrl, fetchGitHubContent } from '../shared/fetch/github';
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
 
 describe('fetchPage', () => {
   const config: WebFetchConfig = {
@@ -34,6 +37,7 @@ describe('fetchPage', () => {
 
   afterEach(() => {
     vi.restoreAllMocks();
+    vi.unstubAllEnvs();
   });
 
   // Helper: set up a default HTML fetch mock
@@ -756,6 +760,34 @@ describe('fetchPage', () => {
     });
     expect(result.source).toBe('size-exceeded');
     expect(result.text).toContain('exceeded max-response-size');
+  });
+
+  // ─── Cache dir env fallback (HOME empty → USERPROFILE) ─────────────────
+
+  it('falls back to USERPROFILE for the cache dir when HOME is empty', async () => {
+    const userHome = fs.mkdtempSync(path.join(os.tmpdir(), 'henyo-userprofile-'));
+    vi.stubEnv('HOME', '');
+    vi.stubEnv('USERPROFILE', userHome);
+    try {
+      vi.stubGlobal('fetch', async () => {
+        const res = new Response('small', { status: 200, headers: { 'Content-Length': '5000' } });
+        Object.defineProperty(res, 'url', { value: 'https://example.com/up-big', configurable: true });
+        return res;
+      });
+      const result = await fetchPage({
+        url: 'https://example.com/up-big',
+        timeout: 10000,
+        noCache: false,
+        config: { ...config, 'max-response-size': 1000 },
+      });
+      expect(result.source).toBe('size-exceeded');
+      // The pipeline's size-exceeded result carries no cacheFilePath; the entry
+      // is written by cache.put into getCacheDir('henyo_fetch') — must resolve via USERPROFILE
+      const cacheDir = `${userHome}/.pi/tools-cache/henyo_fetch`;
+      expect(fs.readdirSync(cacheDir)).toHaveLength(1);
+    } finally {
+      fs.rmSync(userHome, { recursive: true, force: true });
+    }
   });
 });
 

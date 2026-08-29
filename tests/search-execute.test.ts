@@ -712,3 +712,28 @@ describe('tool-layer trace logging', () => {
     }
   });
 });
+
+// ─── Test: cache dir env fallback (HOME empty → USERPROFILE) ───────────────
+
+describe('cache dir falls back to USERPROFILE when HOME is empty', () => {
+  it('writes the cache file under USERPROFILE', async () => {
+    const userHome = mkdtempSync(join(tmpdir(), 'henyo-userprofile-search-'));
+    vi.stubEnv('HOME', '');
+    vi.stubEnv('USERPROFILE', userHome);
+    try {
+      const mockProvider = vi.fn().mockResolvedValue([
+        { title: 'Hit', url: 'https://a.com', snippet: 's', domain: 'a.com' },
+      ] as SearchResult[]);
+      const executor = createSearchExecute(mockProvider, 'search_up_c', true);
+
+      const result = await executor('id1', { query: 'up-query' }, new AbortController().signal, undefined, {});
+      expect(result.details.count).toBe(1);
+
+      const filePath = `${userHome}/.pi/tools-cache/search_up_c/${createHash('sha256').update('search:search_up_c:up-query').digest('hex')}.json`;
+      expect(fs.existsSync(filePath)).toBe(true);
+    } finally {
+      vi.unstubAllEnvs();
+      fs.rmSync(userHome, { recursive: true, force: true });
+    }
+  });
+});

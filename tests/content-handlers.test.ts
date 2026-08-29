@@ -150,6 +150,24 @@ describe('handleContent — JSON', () => {
     }
   });
 
+  it('computes cacheFilePath under USERPROFILE when HOME is empty (env fallback)', async () => {
+    const userHome = fs.mkdtempSync(path.join(os.tmpdir(), 'henyo-fetch-'));
+    vi.stubEnv('HOME', '');
+    vi.stubEnv('USERPROFILE', userHome);
+    try {
+      const raw = '{"name":"yaml","downloads":800000000}';
+      const result = await handleContent(
+        options({ body: raw, contentType: 'application/json', contentThreshold: 10 }),
+      );
+      expect(result!.oversized).toBe(true);
+      expect(result!.cacheFilePath).toContain(`${userHome}/.pi/tools-cache/henyo_fetch/`);
+      expect(result!.cacheFilePath.endsWith('.json')).toBe(true);
+    } finally {
+      vi.unstubAllEnvs();
+      fs.rmSync(userHome, { recursive: true, force: true });
+    }
+  });
+
   it('falls through to null when the JSON body fails to parse', async () => {
     const cache = makeCache();
     const result = await handleContent(
