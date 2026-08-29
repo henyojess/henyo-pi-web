@@ -80,7 +80,7 @@ title constraint), not just shortening or rephrasing. After 2 failed retries
   don't read the whole file. With `noCache` the result is not persisted, so the
   envelope carries a `note` instead of `cacheFilePath` — re-run without
   `noCache` to get a readable file
-- When `henyo-search.trace` is set in settings, **every** search/fetch outcome is
+- When `henyo-web.search.trace` is set in settings, **every** search/fetch outcome is
   logged to `/tmp/henyo-trace.log` (tool + provider layers: cache hits,
   cooldown blocks with `error="http-429"`/`error="captcha"` etc., no-results,
   errors, successes; fetch: ok/cache/oversized/size-exceeded/error) — check it

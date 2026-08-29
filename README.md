@@ -153,25 +153,27 @@ Optional settings go in `~/.pi/agent/settings.json` (shared with the rest of pi'
 
 ```json
 {
-  "henyo-fetch": {
-    "jinaEnabled": true,
-    "waybackEnabled": true,
-    "min-delay": 1000,
-    "max-delay": 3000,
-    "cache-max-files": 100,
-    "heading-threshold": 40000,
-    "content-threshold": 32000,
-    "jina-timeout": 30000,
-    "max-response-size": 10485760
-  },
-  "henyo-search": {
-    "trace": true,
-    "providers": { "stackoverflow": { "api-key": "SO-KEY" } }
+  "henyo-web": {
+    "fetch": {
+      "jinaEnabled": true,
+      "waybackEnabled": true,
+      "min-delay": 1000,
+      "max-delay": 3000,
+      "cache-max-files": 100,
+      "heading-threshold": 40000,
+      "content-threshold": 32000,
+      "jina-timeout": 30000,
+      "max-response-size": 10485760
+    },
+    "search": {
+      "trace": true,
+      "providers": { "stackoverflow": { "api-key": "SO-KEY" } }
+    }
   }
 }
 ```
 
-**henyo-fetch config options:**
+**henyo-web.fetch config options:**
 
 | Option | Type | Default | Description |
 |--------|------|---------|-------------|
@@ -184,7 +186,7 @@ Optional settings go in `~/.pi/agent/settings.json` (shared with the rest of pi'
 | `jina-timeout` | number | 30000 | Jina fallback timeout (ms) |
 | `max-response-size` | number | 10485760 | Max response body size (bytes) |
 
-**henyo-search config options:**
+**henyo-web.search config options:**
 
 | Option | Type | Default | Description |
 |--------|------|---------|-------------|
@@ -197,7 +199,7 @@ Per-provider blocks live under `providers`, keyed by provider name (`stackoverfl
 
 ### Trace logging
 
-When `henyo-search.trace` is enabled, **every outcome of the whole search and fetch process** is appended to `/tmp/henyo-trace.log` — so "what happened to my search/fetch?" is answerable from one log:
+When `henyo-web.search.trace` is enabled, **every outcome of the whole search and fetch process** is appended to `/tmp/henyo-trace.log` — so "what happened to my search/fetch?" is answerable from one log:
 
 - **Search, tool layer** (`search_ddg`, `search_wikipedia`, `search_stackoverflow`, `search_npm`, `search_github`): cache hits, cooldown blocks, provider errors, aborts, no-results, successes.
 - **Search, provider layer** (`duckduckgo`, `github`, `stackoverflow`, `npm`, `wikipedia`): successes and failures — including the rate-limit events that **set a cooldown** (e.g. `error="http-429"`, `error="captcha"`, `error="so-api-rate-limited"`), logged at the moment the cooldown is written.
